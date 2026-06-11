@@ -96,6 +96,7 @@ func RunDockerWatch(ctx context.Context, cfg Config, container string, emit Emit
 		}
 		if err == nil {
 			scanner := bufio.NewScanner(stdout)
+			scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 			for scanner.Scan() {
 				evType, payload := MapDockerEvent(scanner.Bytes())
 				emitOnce(evType, payload)

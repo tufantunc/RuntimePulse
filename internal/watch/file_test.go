@@ -83,3 +83,31 @@ func TestFileWatchDebouncesBursts(t *testing.T) {
 		t.Fatalf("burst must collapse to one event, got %v", evs)
 	}
 }
+
+func TestFileWatchRemoveRecreateReportsFinalState(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dist.js")
+	if err := os.WriteFile(path, []byte("v1"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rec := startFileWatch(t, path) // initial file.created
+	rec.waitLen(t, 1)
+
+	// bundler-style: remove and recreate within the debounce window
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if err := os.WriteFile(path, []byte("v2"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	evs := rec.waitLen(t, 2)
+	if evs[1] != "file.changed" {
+		t.Fatalf("rm+recreate must report final state file.changed, got %v", evs)
+	}
+	time.Sleep(700 * time.Millisecond)
+	if evs := rec.snapshot(); len(evs) != 2 {
+		t.Fatalf("exactly one coalesced event expected, got %v", evs)
+	}
+}
