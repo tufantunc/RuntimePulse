@@ -6,13 +6,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/tufantunc/RuntimePulse/internal/core"
 )
 
 func TestBuildClaudeArgs(t *testing.T) {
 	args := BuildClaudeArgs("abc123", "Postgres ready. Continue.")
-	want := []string{"--resume", "abc123", "-p", "Postgres ready. Continue.", "--output-format", "json"}
+	want := []string{"--resume", "abc123", "--output-format", "json", "-p", "--", "Postgres ready. Continue."}
 	if len(args) != len(want) {
 		t.Fatalf("args = %v", args)
 	}
@@ -81,5 +82,42 @@ func TestClaudeResumeNonzeroExit(t *testing.T) {
 	}
 	if res.ExitCode != 1 || !strings.Contains(res.OutputSummary, "denied") {
 		t.Fatalf("failure not captured: %#v", res)
+	}
+}
+
+func TestClaudeResumeDashPromptArrivesIntact(t *testing.T) {
+	dir := t.TempDir()
+	mock := filepath.Join(dir, "mock-claude")
+	// echo the LAST argument back as the result
+	script := "#!/bin/sh\nfor last; do :; done\nprintf '{\"result\":\"%s\"}' \"$last\"\n"
+	if err := os.WriteFile(mock, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("RUNTIMEPULSE_CLAUDE_BIN", mock)
+	res, err := Claude{}.Resume(context.Background(),
+		core.Session{SessionID: "abc", RepoPath: dir}, "- Postgres is ready. Continue.")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.OutputSummary != "- Postgres is ready. Continue." {
+		t.Fatalf("dash prompt mangled: %q", res.OutputSummary)
+	}
+}
+
+func TestClaudeResumeTimeoutAnnotated(t *testing.T) {
+	dir := t.TempDir()
+	mock := filepath.Join(dir, "mock-claude")
+	if err := os.WriteFile(mock, []byte("#!/bin/sh\nsleep 5\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("RUNTIMEPULSE_CLAUDE_BIN", mock)
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	res, err := Claude{}.Resume(ctx, core.Session{SessionID: "abc", RepoPath: dir}, "go")
+	if err != nil {
+		t.Fatalf("timeout is a Result, not an error: %v", err)
+	}
+	if res.ExitCode != -1 || !strings.Contains(res.OutputSummary, "timed out or cancelled") {
+		t.Fatalf("timeout not annotated: %#v", res)
 	}
 }

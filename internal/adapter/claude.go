@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/tufantunc/RuntimePulse/internal/core"
 )
@@ -40,8 +41,13 @@ func claudeBin() string {
 	return "claude"
 }
 
+// BuildClaudeArgs builds the resume invocation. The prompt is a
+// positional argument terminated by "--" so rendered prompts that start
+// with a dash can never be eaten by claude's option parser (a "--help"
+// prompt would otherwise exit 0 without resuming — a silent false
+// success). --output-format must precede the terminator.
 func BuildClaudeArgs(sessionID, prompt string) []string {
-	return []string{"--resume", sessionID, "-p", prompt, "--output-format", "json"}
+	return []string{"--resume", sessionID, "--output-format", "json", "-p", "--", prompt}
 }
 
 // ParseClaudeOutput extracts the result text from --output-format json,
@@ -58,10 +64,14 @@ func ParseClaudeOutput(out []byte) (string, bool) {
 }
 
 func truncate(s string) string {
-	if len(s) > summaryLimit {
-		return s[:summaryLimit]
+	if len(s) <= summaryLimit {
+		return s
 	}
-	return s
+	cut := summaryLimit
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut]
 }
 
 func (c Claude) Resume(ctx context.Context, sess core.Session, prompt string) (Result, error) {
@@ -80,6 +90,11 @@ func (c Claude) Resume(ctx context.Context, sess core.Session, prompt string) (R
 	res.OutputSummary = summary
 
 	if err != nil {
+		if ctx.Err() != nil {
+			res.ExitCode = -1
+			res.OutputSummary = "resume timed out or cancelled: " + res.OutputSummary
+			return res, nil // the run WAS attempted; timeout is a Result
+		}
 		var ee *exec.ExitError
 		if errors.As(err, &ee) {
 			res.ExitCode = ee.ExitCode() // agent ran and failed: a Result, not an error

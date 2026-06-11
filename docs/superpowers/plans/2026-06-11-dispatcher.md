@@ -541,7 +541,7 @@ import (
 
 func TestBuildClaudeArgs(t *testing.T) {
 	args := BuildClaudeArgs("abc123", "Postgres ready. Continue.")
-	want := []string{"--resume", "abc123", "-p", "Postgres ready. Continue.", "--output-format", "json"}
+	want := []string{"--resume", "abc123", "--output-format", "json", "-p", "--", "Postgres ready. Continue."}
 	if len(args) != len(want) {
 		t.Fatalf("args = %v", args)
 	}
@@ -664,7 +664,7 @@ func claudeBin() string {
 }
 
 func BuildClaudeArgs(sessionID, prompt string) []string {
-	return []string{"--resume", sessionID, "-p", prompt, "--output-format", "json"}
+	return []string{"--resume", sessionID, "--output-format", "json", "-p", "--", prompt}
 }
 
 // ParseClaudeOutput extracts the result text from --output-format json,
