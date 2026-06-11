@@ -37,4 +37,30 @@ sleep 0.3
 kill $fpid 2>/dev/null || true
 grep -q 'docker.healthy' "$dir/follow.jsonl" || { echo "FAIL: follow stream empty"; exit 1; }
 
+# --- watchers: file watch fires a rule via a real fs event ---
+"$rp" session register --agent claude --session smoke-2 --repo "$dir"
+"$rp" rule add --on file.created:"$dir/artifact.txt" --session smoke-2 \
+  --prompt 'Artifact ready. Continue.' --one-shot
+"$rp" watch add file --path "$dir/artifact.txt"
+sleep 0.3
+touch "$dir/artifact.txt"
+sleep 0.8
+status=$("$rp" status)
+echo "$status"
+echo "$status" | grep -q '"pendingContinuations":2' || { echo "FAIL: file watch did not fire rule"; exit 1; }
+
+# --- exec wrapper: success and failure both produce events ---
+"$rp" exec --label smoke-build -- true
+if "$rp" exec --label smoke-build -- false; then echo "FAIL: exec must preserve exit code"; exit 1; fi
+"$rp" events --type exec.succeeded | grep -q smoke-build || { echo "FAIL: exec.succeeded missing"; exit 1; }
+"$rp" events --type exec.failed | grep -q smoke-build || { echo "FAIL: exec.failed missing"; exit 1; }
+
+# --- watch survives daemon restart (re-arm) ---
+"$rp" watch list | grep -q '"type":"file"' || { echo "FAIL: watch not persisted"; exit 1; }
+kill $dpid && wait $dpid 2>/dev/null || true
+"$rp" daemon >"$dir/daemon-out2.log" 2>&1 &
+dpid=$!
+sleep 0.5
+"$rp" watch list | grep -q '"type":"file"' || { echo "FAIL: watch lost after restart"; exit 1; }
+
 echo "SMOKE OK"
