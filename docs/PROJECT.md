@@ -216,12 +216,12 @@ type Adapter interface {
 
 | Agent | Resume command | Notes |
 |---|---|---|
-| Claude Code | `claude -p --resume <id> "<prompt>"` | Headless. Channels, if available, is an optional optimization; CLI resume is the fallback. |
-| Cursor CLI | `cursor-agent --resume=<id> -p "<prompt>"` | |
-| Codex CLI | `codex exec resume <id> "<prompt>"` | |
-| OpenCode | `opencode run --session <id> "<prompt>"` | |
+| Claude Code | `claude --resume <id> -p "<prompt>" --output-format json` | Concurrent resumes of one session interleave — FIFO queue is mandatory. Channels (research preview) can push into *running* sessions; CLI resume is the fallback. |
+| Cursor CLI | `agent -p --resume <id> --output-format json --workspace <repo> "<prompt>"` | Binary renamed `cursor-agent` → `agent`; detect both. `-p`+`--resume` combination unconfirmed in official docs — `Validate()` must smoke-test it. |
+| Codex CLI | `codex exec resume <id> --json -C <repo> "<prompt>"` | Needs `--sandbox workspace-write` for edits. No session-list command; ids discovered from `~/.codex/sessions/`. |
+| OpenCode | `opencode run --session <id> --dir <repo> --format json "<prompt>"` | Exit codes unreliable (documented exit-0-on-error history) — parse JSON events. Prefer `opencode serve` + `POST /session/:id/message` when a server runs. |
 
-Exact flags must be verified against installed CLI versions during adapter implementation; `Validate()` exists precisely because these surfaces drift.
+Per-CLI details (session id locations, output schemas, auth, MCP registration) are distilled in [`docs/reference/`](reference/README.md), verified 2026-06-11. These surfaces drift; `Validate()` exists precisely because of that.
 
 Future targets: LangGraph agents, AutoGen, custom orchestrators.
 
