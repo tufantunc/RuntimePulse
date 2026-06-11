@@ -116,16 +116,10 @@ func (s *Store) ListContinuations(state string) ([]core.Continuation, error) {
 	defer rows.Close()
 	var out []core.Continuation
 	for rows.Next() {
-		var c core.Continuation
-		var st, created, updated string
-		var exit *int
-		if err := rows.Scan(&c.ID, &c.RuleID, &c.EventID, &c.SessionID, &c.Prompt, &c.Label,
-			&st, &c.Command, &exit, &c.OutputSummary, &created, &updated); err != nil {
+		c, err := scanContinuation(rows)
+		if err != nil {
 			return nil, err
 		}
-		c.State = core.ContinuationState(st)
-		c.ExitCode = exit
-		c.CreatedAt, c.UpdatedAt = parseTS(created), parseTS(updated)
 		out = append(out, c)
 	}
 	return out, rows.Err()
