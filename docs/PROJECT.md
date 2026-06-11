@@ -85,13 +85,16 @@ An immutable fact about the environment.
 
 | Watch type | Positive | Negative |
 |---|---|---|
-| http | `http.available` | `http.unavailable` |
+| http | `http.available` (2xx/3xx) | `http.unavailable` |
+| tcp | `tcp.available` | `tcp.unavailable` |
 | docker | `docker.healthy`, `docker.started` | `docker.unhealthy`, `docker.stopped` |
 | file | `file.created`, `file.changed` | `file.removed` |
 | process | `process.started` | `process.exited` |
-| build | `build.succeeded` | `build.failed` |
-| git | `git.pushed`, `git.branch.changed` | — |
+| exec wrapper | `exec.succeeded` | `exec.failed` |
+| git | `git.branch.changed`, `git.ref.changed` | — |
 | (internal) | `continuation.completed` | `continuation.failed` |
+
+Notes: `tcp` is the service-agnostic readiness check (e.g. postgres on `localhost:5432`). Build events come from the `runtimepulse exec --label <name> -- <cmd>` wrapper, which runs the command and emits `exec.succeeded/failed` with the label as `source` — this also covers `docker compose up --wait` style readiness. `git.pushed` was dropped: a push is not reliably detectable from the local machine; `git.ref.changed` (refs) and `git.branch.changed` (HEAD) are. Docker watching uses `docker events` / `docker inspect` CLI subprocesses (push-based, no SDK dependency).
 
 Failure events are not an afterthought: the moments an agent most needs to be woken are the failures.
 
@@ -234,9 +237,14 @@ runtimepulse daemon                 # run the daemon in foreground (also auto-st
 runtimepulse status                 # daemon + watch + session overview
 
 runtimepulse watch add http --url http://localhost:3000
+runtimepulse watch add tcp --addr localhost:5432
 runtimepulse watch add docker --container postgres
 runtimepulse watch add file --path dist/index.js
+runtimepulse watch add process --pattern "vite"
+runtimepulse watch add git --repo .
 runtimepulse watch list | rm <id>
+
+runtimepulse exec --label build -- npm run build   # emits exec.succeeded/failed
 
 runtimepulse rule add --on docker.healthy:postgres \
   --session abc123 --agent claude \
@@ -316,9 +324,9 @@ Local, single-user developer machine by assumption (documented, not accidental):
 | Language | Go |
 | CLI framework | cobra |
 | Storage | SQLite via `modernc.org/sqlite` (CGO-free, easy cross-compile) |
-| File watching | fsnotify |
-| Docker watching | Docker Engine Events API (push-based) |
-| HTTP watching | `net/http` probes (internal polling with stability threshold) |
+| File/git watching | fsnotify |
+| Docker watching | `docker events` / `docker inspect` CLI subprocesses (push-based, no SDK) |
+| HTTP/TCP watching | `net/http` / `net.Dial` probes (internal polling with stability threshold) |
 | Prompt templates | Go `text/template` |
 | IPC | unix socket, JSON-RPC |
 
