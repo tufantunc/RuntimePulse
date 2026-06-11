@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Stages 1–2 implemented and merged to main: core engine (store/bus/engine/daemon/client/CLI) and watchers (http, tcp, file, process, docker, git + `exec` wrapper). Next per spec §13: continuation dispatcher + agent adapters, then MCP server, then workflow YAML/WebSocket.
 
-Commands: `go build ./...`, `go test -race ./...`, `go test -run TestName ./internal/...`, `golangci-lint run`, end-to-end: `./scripts/smoke.sh` (hermetic, must end `SMOKE OK`). Package layout: `internal/core` (domain types), `internal/store` (SQLite, single-connection — NEVER touch `s.db` while a tx is open), `internal/bus`, `internal/engine`, `internal/watch`, `internal/daemon`, `internal/client`, `cmd/runtimepulse`. Continuations currently stop at `pending` (dispatcher is the next stage). Prompts are rendered at ingest and stored on the continuation — the dispatcher must NOT re-render.
+Commands: `go build ./...`, `go test -race ./...`, `go test -run TestName ./internal/...`, `go vet ./...`, `gofmt -l .` (must print nothing), `golangci-lint run`, end-to-end: `./scripts/smoke.sh` (hermetic, must end `SMOKE OK`). Package layout: `internal/core` (domain types), `internal/store` (SQLite, single-connection — NEVER touch `s.db` while a tx is open), `internal/bus`, `internal/engine`, `internal/watch`, `internal/daemon`, `internal/client`, `cmd/runtimepulse`. Continuations currently stop at `pending` (dispatcher is the next stage). Prompts are rendered at ingest and stored on the continuation — the dispatcher must NOT re-render.
 
 Two authoritative documents — read both before designing or implementing anything:
 
@@ -15,7 +15,7 @@ Two authoritative documents — read both before designing or implementing anyth
 
 ## What RuntimePulse Is
 
-An event-driven **session continuation engine** for AI coding agents (Claude Code, Cursor CLI, Codex CLI, OpenCode). It watches runtime conditions (http, docker, file, process, build, git) and, when a condition is met, *resumes* the relevant agent session with the event injected as a new prompt turn — e.g. `claude -p --resume abc123 "Postgres is healthy. Continue the migration step."`
+An event-driven **session continuation engine** for AI coding agents (Claude Code, Cursor CLI, Codex CLI, OpenCode). It watches runtime conditions (http, tcp, docker, file, process, git — plus the `runtimepulse exec` wrapper for build/command outcomes) and, when a condition is met, *resumes* the relevant agent session with the event injected as a new prompt turn — e.g. `claude -p --resume abc123 "Postgres is healthy. Continue the migration step."`
 
 Key constraint: agents are **never pushed messages**. The flow is always:
 
@@ -41,8 +41,8 @@ It is explicitly NOT a messaging system, push-notification layer, or chat platfo
 
 ## Implementation Order (from spec §13)
 
-1. Core: store, bus, rule engine, daemon + socket RPC
-2. Watchers (http, docker, file, process, build, git)
+1. ✅ Core: store, bus, rule engine, daemon + socket RPC
+2. ✅ Watchers (http, tcp, docker, file, process, git) + `exec` wrapper
 3. Dispatcher + supervision + adapters (Claude Code first)
 4. CLI surface + MCP server (`create_watch`, `create_rule`, `wait_for_event`, `get_events`, `cancel_rule`)
 5. Workflow YAML compiler, WebSocket streaming (127.0.0.1 + token), Claude Channels optimization
@@ -51,5 +51,5 @@ Acceptance scenario: docker up → postgres healthy → resume session → migra
 
 ## Conventions
 
-* Stack: cobra (CLI), `modernc.org/sqlite` (no CGO), fsnotify, Docker Engine Events API.
+* Stack: cobra (CLI), `modernc.org/sqlite` (no CGO), fsnotify, `docker events`/`docker inspect` CLI subprocesses (no Docker SDK).
 * All documentation in English.
