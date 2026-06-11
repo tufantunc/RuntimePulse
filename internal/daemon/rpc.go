@@ -172,6 +172,22 @@ func (d *Daemon) ruleAdd(params json.RawMessage) (any, error) {
 		return nil, errors.New("rule.add: type, sessionId and prompt are required")
 	}
 
+	// Syntax-check the template before any side effects so a malformed
+	// rule fails at creation without registering the session.
+	if err := core.ValidatePromptTemplate(p.Prompt); err != nil {
+		return nil, fmt.Errorf("rule.add: bad prompt template: %w", err)
+	}
+
+	// Parse expiresAt before any side effects too.
+	var expiresAt *time.Time
+	if p.ExpiresAt != "" {
+		t, err := time.Parse(time.RFC3339, p.ExpiresAt)
+		if err != nil {
+			return nil, fmt.Errorf("rule.add: bad expiresAt: %w", err)
+		}
+		expiresAt = &t
+	}
+
 	// Self-registration path (spec §4.4): agent+repoPath registers the
 	// session in the same call. Otherwise the session must already exist.
 	if p.Agent != "" && p.RepoPath != "" {
@@ -193,18 +209,7 @@ func (d *Daemon) ruleAdd(params json.RawMessage) (any, error) {
 		PromptTemplate: p.Prompt,
 		Label:          p.Label,
 		OneShot:        p.OneShot,
-	}
-	if p.ExpiresAt != "" {
-		t, err := time.Parse(time.RFC3339, p.ExpiresAt)
-		if err != nil {
-			return nil, fmt.Errorf("rule.add: bad expiresAt: %w", err)
-		}
-		r.ExpiresAt = &t
-	}
-	// Syntax-check the template now so a malformed rule fails at
-	// creation; execution errors surface later as failed continuations.
-	if err := core.ValidatePromptTemplate(p.Prompt); err != nil {
-		return nil, fmt.Errorf("rule.add: bad prompt template: %w", err)
+		ExpiresAt:      expiresAt,
 	}
 	return d.Engine.Store.AddRule(r)
 }

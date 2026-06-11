@@ -97,6 +97,27 @@ func TestRuleSessionInjectFlow(t *testing.T) {
 	}
 }
 
+func TestRuleAddInvalidTemplateHasNoSideEffects(t *testing.T) {
+	_, c := startTestDaemon(t)
+	err := c.Call("rule.add", map[string]any{
+		"type": "docker.healthy", "sessionId": "side-effect-test",
+		"agent": "claude", "repoPath": "/tmp/x",
+		"prompt": "{{.Event.Source", // syntax error
+	}, &map[string]any{})
+	if err == nil {
+		t.Fatal("bad template must fail rule.add")
+	}
+	var sessions []map[string]any
+	if err := c.Call("session.list", nil, &sessions); err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range sessions {
+		if s["sessionId"] == "side-effect-test" {
+			t.Fatal("failed rule.add must not register the session")
+		}
+	}
+}
+
 func TestSocketPermissions(t *testing.T) {
 	d, _ := startTestDaemon(t)
 	info, err := os.Stat(SocketPath(d.Dir))

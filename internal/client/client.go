@@ -36,6 +36,9 @@ func (c *Client) Call(method string, params, out any) error {
 		return err
 	}
 	defer conn.Close()
+	// A wedged daemon must not hang the CLI; Follow deliberately
+	// has no deadline (it streams indefinitely).
+	conn.SetDeadline(time.Now().Add(5 * time.Second))
 	if err := json.NewEncoder(conn).Encode(request{ID: 1, Method: method, Params: params}); err != nil {
 		return err
 	}
