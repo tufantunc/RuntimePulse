@@ -51,7 +51,9 @@ func TestRenderPrompt(t *testing.T) {
 		Source:  "postgres",
 		Payload: map[string]string{"container": "postgres"},
 	}
-	r := Rule{PromptTemplate: `{{.Event.Source}} is healthy ({{index .Event.Payload "container"}}). Continue.`}
+	// Canonical payload access is field syntax (.Event.Payload.key), NOT
+	// {{index ...}}: index silently bypasses missingkey=error.
+	r := Rule{PromptTemplate: `{{.Event.Source}} is healthy ({{.Event.Payload.container}}). Continue.`}
 	got, err := r.RenderPrompt(ev)
 	if err != nil {
 		t.Fatal(err)
@@ -59,6 +61,15 @@ func TestRenderPrompt(t *testing.T) {
 	want := "postgres is healthy (postgres). Continue."
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
+	}
+}
+
+func TestRenderPromptMissingPayloadKey(t *testing.T) {
+	// A referenced-but-absent payload key must error loudly, never
+	// inject an empty string into an agent prompt.
+	r := Rule{PromptTemplate: `{{.Event.Payload.container}} ready`}
+	if _, err := r.RenderPrompt(Event{Type: "docker.healthy"}); err == nil {
+		t.Fatal("expected error for missing payload key")
 	}
 }
 
