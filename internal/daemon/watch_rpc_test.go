@@ -6,6 +6,14 @@ import (
 	"time"
 )
 
+func TestWatchAddGitValidation(t *testing.T) {
+	_, c := startTestDaemon(t)
+	err := c.Call("watch.add", map[string]any{"type": "git", "target": "/tmp/definitely-not-a-repo"}, &map[string]any{})
+	if err == nil {
+		t.Fatal("git watch on a non-repo must be rejected at add time")
+	}
+}
+
 func TestWatchRPCLifecycle(t *testing.T) {
 	_, c := startTestDaemon(t)
 

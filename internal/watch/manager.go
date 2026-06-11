@@ -3,6 +3,7 @@ package watch
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 	"sync"
 )
@@ -75,6 +76,7 @@ func (m *Manager) run(ctx context.Context, w Watch) {
 		}
 		m.emit(evType, source, payload)
 	}
+	var err error
 	switch w.Type {
 	case "http":
 		RunPoller(ctx, w.Config, "http.available", "http.unavailable", w.Target, HTTPProber(w.Target), wrappedEmit)
@@ -83,11 +85,14 @@ func (m *Manager) run(ctx context.Context, w Watch) {
 	case "process":
 		RunPoller(ctx, w.Config, "process.started", "process.exited", w.Target, ProcessProber(w.Target), wrappedEmit)
 	case "file":
-		RunFileWatch(ctx, w.Config, w.Target, wrappedEmit)
+		err = RunFileWatch(ctx, w.Config, w.Target, wrappedEmit)
 	case "git":
-		RunGitWatch(ctx, w.Config, w.Target, wrappedEmit)
+		err = RunGitWatch(ctx, w.Config, w.Target, wrappedEmit)
 	case "docker":
-		RunDockerWatch(ctx, w.Config, w.Target, wrappedEmit)
+		err = RunDockerWatch(ctx, w.Config, w.Target, wrappedEmit)
+	}
+	if err != nil && ctx.Err() == nil {
+		log.Printf("watch %s (%s %s) died: %v", w.ID, w.Type, w.Target, err)
 	}
 }
 

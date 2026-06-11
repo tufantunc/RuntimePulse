@@ -34,8 +34,17 @@ func RunFileWatch(ctx context.Context, cfg Config, path string, emit Emitter) er
 		return err
 	}
 	defer w.Close()
-	if err := w.Add(parent); err != nil {
-		return err
+
+	// The parent may not exist yet (dist/ before the first build): poll
+	// until it does, then arm. A missing parent must never kill the
+	// watch — that would silently reintroduce the wait-forever problem
+	// the initial-check semantics exist to prevent.
+	for w.Add(parent) != nil {
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(debounce):
+		}
 	}
 
 	exists := false

@@ -84,6 +84,24 @@ func TestFileWatchDebouncesBursts(t *testing.T) {
 	}
 }
 
+func TestFileWatchMissingParentDir(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "dist", "index.js") // dist/ does not exist yet
+	rec := startFileWatch(t, path)
+
+	time.Sleep(200 * time.Millisecond) // watcher must survive the missing parent
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("built"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	evs := rec.waitLen(t, 1)
+	if evs[0] != "file.created" {
+		t.Fatalf("file in late-created parent must emit file.created, got %v", evs)
+	}
+}
+
 func TestFileWatchRemoveRecreateReportsFinalState(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "dist.js")

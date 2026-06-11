@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/tufantunc/RuntimePulse/internal/core"
@@ -138,6 +140,11 @@ func (d *Daemon) dispatch(method string, params json.RawMessage) (any, error) {
 		if p.Type == "docker" {
 			if err := watch.DockerAvailable(); err != nil {
 				return nil, fmt.Errorf("watch.add: docker CLI not found: %w", err)
+			}
+		}
+		if p.Type == "git" {
+			if fi, statErr := os.Stat(filepath.Join(p.Target, ".git")); statErr != nil || !fi.IsDir() {
+				return nil, fmt.Errorf("watch.add: %s is not a git repository", p.Target)
 			}
 		}
 		var cfg watch.Config
