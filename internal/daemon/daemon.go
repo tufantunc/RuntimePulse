@@ -4,6 +4,7 @@ package daemon
 import (
 	"context"
 	"fmt"
+	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -80,7 +81,11 @@ func New(dir string) (*Daemon, error) {
 	eng := engine.New(st, b)
 	mgr := watch.NewManager(func(evType, source string, payload map[string]string) {
 		// Watcher observations enter the same pipeline as injected events.
-		eng.Ingest(core.Event{Type: evType, Source: source, Payload: payload})
+		// A persistence failure here is the durable-store ethos breaking;
+		// it must at least be visible in the daemon log.
+		if _, err := eng.Ingest(core.Event{Type: evType, Source: source, Payload: payload}); err != nil {
+			log.Printf("watch emit: ingest %s from %s failed: %v", evType, source, err)
+		}
 	})
 	return &Daemon{Dir: dir, Engine: eng, Watches: mgr, store: st, bus: b, ln: ln, lock: lock}, nil
 }

@@ -13,11 +13,19 @@ type Manager struct {
 
 	mu      sync.Mutex
 	ctx     context.Context
-	cancels map[string]context.CancelFunc
+	running map[string]*handle
+}
+
+// handle is a per-spawn token: the goroutine's deferred cleanup deletes
+// its map entry only if the entry still holds ITS handle, so a
+// Stop+Start of the same id can never have the old goroutine's cleanup
+// orphan the new watcher.
+type handle struct {
+	cancel context.CancelFunc
 }
 
 func NewManager(emit Emitter) *Manager {
-	return &Manager{emit: emit, cancels: map[string]context.CancelFunc{}}
+	return &Manager{emit: emit, running: map[string]*handle{}}
 }
 
 // Run records the lifetime ctx and arms all persisted watches
@@ -41,15 +49,18 @@ func (m *Manager) Start(w Watch) error {
 	if m.ctx == nil {
 		return fmt.Errorf("manager not running")
 	}
-	if _, ok := m.cancels[w.ID]; ok {
+	if _, ok := m.running[w.ID]; ok {
 		return nil
 	}
 	ctx, cancel := context.WithCancel(m.ctx)
-	m.cancels[w.ID] = cancel
+	h := &handle{cancel: cancel}
+	m.running[w.ID] = h
 	go func() {
 		defer func() {
 			m.mu.Lock()
-			delete(m.cancels, w.ID)
+			if m.running[w.ID] == h {
+				delete(m.running, w.ID)
+			}
 			m.mu.Unlock()
 		}()
 		m.run(ctx, w)
@@ -83,13 +94,13 @@ func (m *Manager) run(ctx context.Context, w Watch) {
 // Stop cancels the watcher for id (no-op if not running).
 func (m *Manager) Stop(id string) {
 	m.mu.Lock()
-	cancel, ok := m.cancels[id]
+	h, ok := m.running[id]
 	if ok {
-		delete(m.cancels, id)
+		delete(m.running, id)
 	}
 	m.mu.Unlock()
 	if ok {
-		cancel()
+		h.cancel()
 	}
 }
 
@@ -97,8 +108,8 @@ func (m *Manager) Stop(id string) {
 func (m *Manager) RunningIDs() []string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	out := make([]string, 0, len(m.cancels))
-	for id := range m.cancels {
+	out := make([]string, 0, len(m.running))
+	for id := range m.running {
 		out = append(out, id)
 	}
 	sort.Strings(out)
