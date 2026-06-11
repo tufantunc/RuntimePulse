@@ -99,3 +99,20 @@ func scanContinuation(r rowScanner) (core.Continuation, error) {
 	c.CreatedAt, c.UpdatedAt = parseTS(created), parseTS(updated)
 	return c, nil
 }
+
+// InsertManualContinuation creates a rule-less pending continuation
+// (the CLI `continue` command / continuation.run RPC).
+func (s *Store) InsertManualContinuation(sessionID, prompt string) (core.Continuation, error) {
+	now := time.Now().UTC()
+	c := core.Continuation{
+		ID: core.NewID("cont"), RuleID: core.NewID("manual"), EventID: core.NewID("manual"),
+		SessionID: sessionID, Prompt: prompt, Label: "manual",
+		State: core.ContinuationPending, CreatedAt: now, UpdatedAt: now,
+	}
+	_, err := s.db.Exec(`
+		INSERT INTO continuations
+		  (id, rule_id, event_id, session_id, prompt, label, state, output_summary, created_at, updated_at)
+		VALUES (?,?,?,?,?,?,?,?,?,?)`,
+		c.ID, c.RuleID, c.EventID, c.SessionID, c.Prompt, c.Label, string(c.State), "", ts(now), ts(now))
+	return c, err
+}

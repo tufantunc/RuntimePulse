@@ -121,6 +121,30 @@ func (d *Daemon) dispatch(method string, params json.RawMessage) (any, error) {
 			return nil, err
 		}
 		return d.Engine.Store.ListContinuations(p.State)
+	case "continuation.run":
+		p, err := unmarshalParams[struct {
+			SessionID string `json:"sessionId"`
+			Prompt    string `json:"prompt"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+		if p.SessionID == "" || p.Prompt == "" {
+			return nil, errors.New("continuation.run: sessionId and prompt are required")
+		}
+		if _, ok, err := d.Engine.Store.GetSession(p.SessionID); err != nil {
+			return nil, err
+		} else if !ok {
+			return nil, fmt.Errorf("continuation.run: unknown session %q", p.SessionID)
+		}
+		// A manual continuation is rule-less: synthetic unique ids keep
+		// the (rule_id, event_id) idempotency constraint satisfied.
+		c, err := d.Engine.Store.InsertManualContinuation(p.SessionID, p.Prompt)
+		if err != nil {
+			return nil, err
+		}
+		d.Dispatch.Wake()
+		return c, nil
 	case "watch.add":
 		p, err := unmarshalParams[struct {
 			Type      string `json:"type"`
@@ -203,6 +227,10 @@ func (d *Daemon) status() (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	running, err := d.Engine.Store.ListContinuations("running")
+	if err != nil {
+		return nil, err
+	}
 	watches, err := d.Engine.Store.ListWatches()
 	if err != nil {
 		return nil, err
@@ -216,6 +244,7 @@ func (d *Daemon) status() (any, error) {
 		"rules":                len(rules),
 		"sessions":             len(sessions),
 		"pendingContinuations": len(pending),
+		"runningContinuations": len(running),
 		"watches":              len(watches),
 		"lastEvent":            lastEvent,
 	}, nil

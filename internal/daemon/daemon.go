@@ -12,8 +12,10 @@ import (
 
 	"golang.org/x/sys/unix"
 
+	"github.com/tufantunc/RuntimePulse/internal/adapter"
 	"github.com/tufantunc/RuntimePulse/internal/bus"
 	"github.com/tufantunc/RuntimePulse/internal/core"
+	"github.com/tufantunc/RuntimePulse/internal/dispatch"
 	"github.com/tufantunc/RuntimePulse/internal/engine"
 	"github.com/tufantunc/RuntimePulse/internal/store"
 	"github.com/tufantunc/RuntimePulse/internal/watch"
@@ -22,9 +24,10 @@ import (
 const Version = "0.1.0-dev"
 
 type Daemon struct {
-	Dir     string
-	Engine  *engine.Engine
-	Watches *watch.Manager
+	Dir      string
+	Engine   *engine.Engine
+	Watches  *watch.Manager
+	Dispatch *dispatch.Dispatcher
 
 	store *store.Store
 	bus   *bus.Bus
@@ -87,7 +90,9 @@ func New(dir string) (*Daemon, error) {
 			log.Printf("watch emit: ingest %s from %s failed: %v", evType, source, err)
 		}
 	})
-	return &Daemon{Dir: dir, Engine: eng, Watches: mgr, store: st, bus: b, ln: ln, lock: lock}, nil
+	disp := dispatch.New(st, adapter.Registry{"claude": adapter.Claude{}}, eng.Ingest)
+	eng.Notify = disp.Wake
+	return &Daemon{Dir: dir, Engine: eng, Watches: mgr, Dispatch: disp, store: st, bus: b, ln: ln, lock: lock}, nil
 }
 
 // removeStaleSocket deletes a socket file nobody is listening on.
@@ -114,6 +119,7 @@ func (d *Daemon) Serve(ctx context.Context) error {
 		return err
 	}
 	d.Watches.Run(ctx, persisted)
+	go d.Dispatch.Run(ctx)
 	for {
 		conn, err := d.ln.Accept()
 		if err != nil {
