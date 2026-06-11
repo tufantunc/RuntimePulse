@@ -12,15 +12,18 @@ import (
 	"golang.org/x/sys/unix"
 
 	"github.com/tufantunc/RuntimePulse/internal/bus"
+	"github.com/tufantunc/RuntimePulse/internal/core"
 	"github.com/tufantunc/RuntimePulse/internal/engine"
 	"github.com/tufantunc/RuntimePulse/internal/store"
+	"github.com/tufantunc/RuntimePulse/internal/watch"
 )
 
 const Version = "0.1.0-dev"
 
 type Daemon struct {
-	Dir    string
-	Engine *engine.Engine
+	Dir     string
+	Engine  *engine.Engine
+	Watches *watch.Manager
 
 	store *store.Store
 	bus   *bus.Bus
@@ -74,7 +77,12 @@ func New(dir string) (*Daemon, error) {
 		lock.Close()
 		return nil, err
 	}
-	return &Daemon{Dir: dir, Engine: engine.New(st, b), store: st, bus: b, ln: ln, lock: lock}, nil
+	eng := engine.New(st, b)
+	mgr := watch.NewManager(func(evType, source string, payload map[string]string) {
+		// Watcher observations enter the same pipeline as injected events.
+		eng.Ingest(core.Event{Type: evType, Source: source, Payload: payload})
+	})
+	return &Daemon{Dir: dir, Engine: eng, Watches: mgr, store: st, bus: b, ln: ln, lock: lock}, nil
 }
 
 // removeStaleSocket deletes a socket file nobody is listening on.
@@ -96,6 +104,11 @@ func (d *Daemon) Serve(ctx context.Context) error {
 		<-ctx.Done()
 		d.ln.Close()
 	}()
+	persisted, err := d.store.ListWatches()
+	if err != nil {
+		return err
+	}
+	d.Watches.Run(ctx, persisted)
 	for {
 		conn, err := d.ln.Accept()
 		if err != nil {

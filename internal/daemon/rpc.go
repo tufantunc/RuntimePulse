@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/tufantunc/RuntimePulse/internal/core"
+	"github.com/tufantunc/RuntimePulse/internal/watch"
 )
 
 type request struct {
@@ -118,6 +119,61 @@ func (d *Daemon) dispatch(method string, params json.RawMessage) (any, error) {
 			return nil, err
 		}
 		return d.Engine.Store.ListContinuations(p.State)
+	case "watch.add":
+		p, err := unmarshalParams[struct {
+			Type      string `json:"type"`
+			Target    string `json:"target"`
+			Interval  string `json:"interval"`  // Go duration, optional
+			Stability string `json:"stability"` // Go duration, optional
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+		if err := watch.ValidateType(p.Type); err != nil {
+			return nil, err
+		}
+		if p.Target == "" {
+			return nil, errors.New("watch.add: target is required")
+		}
+		if p.Type == "docker" {
+			if err := watch.DockerAvailable(); err != nil {
+				return nil, fmt.Errorf("watch.add: docker CLI not found: %w", err)
+			}
+		}
+		var cfg watch.Config
+		if p.Interval != "" {
+			dur, err := time.ParseDuration(p.Interval)
+			if err != nil {
+				return nil, fmt.Errorf("watch.add: bad interval: %w", err)
+			}
+			cfg.Interval = dur
+		}
+		if p.Stability != "" {
+			dur, err := time.ParseDuration(p.Stability)
+			if err != nil {
+				return nil, fmt.Errorf("watch.add: bad stability: %w", err)
+			}
+			cfg.StabilityThreshold = dur
+		}
+		w, err := d.Engine.Store.AddWatch(watch.Watch{Type: p.Type, Target: p.Target, Config: cfg})
+		if err != nil {
+			return nil, err
+		}
+		if err := d.Watches.Start(w); err != nil {
+			return nil, err
+		}
+		return w, nil
+	case "watch.list":
+		return d.Engine.Store.ListWatches()
+	case "watch.remove":
+		p, err := unmarshalParams[struct {
+			ID string `json:"id"`
+		}](params)
+		if err != nil {
+			return nil, err
+		}
+		d.Watches.Stop(p.ID)
+		return "ok", d.Engine.Store.RemoveWatch(p.ID)
 	default:
 		return nil, fmt.Errorf("unknown method %q", method)
 	}
@@ -140,6 +196,10 @@ func (d *Daemon) status() (any, error) {
 	if err != nil {
 		return nil, err
 	}
+	watches, err := d.Engine.Store.ListWatches()
+	if err != nil {
+		return nil, err
+	}
 	lastEvent := ""
 	if len(events) > 0 {
 		lastEvent = events[0].Type + " @ " + events[0].Timestamp.Format(time.RFC3339)
@@ -149,6 +209,7 @@ func (d *Daemon) status() (any, error) {
 		"rules":                len(rules),
 		"sessions":             len(sessions),
 		"pendingContinuations": len(pending),
+		"watches":              len(watches),
 		"lastEvent":            lastEvent,
 	}, nil
 }
