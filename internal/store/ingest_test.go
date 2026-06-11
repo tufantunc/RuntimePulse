@@ -111,3 +111,32 @@ func TestIngestRenderErrorYieldsFailedContinuation(t *testing.T) {
 		t.Fatalf("render error not surfaced: %#v", c)
 	}
 }
+
+func TestIngestFanOut(t *testing.T) {
+	s := openTestStore(t)
+	r1 := mustAddRule(t, s, core.Rule{
+		Selector:  core.EventSelector{Type: "docker.healthy", Source: "postgres"},
+		SessionID: "sess-1", PromptTemplate: "a",
+	})
+	r2 := mustAddRule(t, s, core.Rule{
+		Selector:  core.EventSelector{Type: "docker.healthy"}, // source-any
+		SessionID: "sess-2", PromptTemplate: "b",
+	})
+	// non-matching source must NOT fire
+	mustAddRule(t, s, core.Rule{
+		Selector:  core.EventSelector{Type: "docker.healthy", Source: "redis"},
+		SessionID: "sess-3", PromptTemplate: "c",
+	})
+
+	res := ingestEvent(t, s, "evt-1")
+	if len(res.Continuations) != 2 {
+		t.Fatalf("fan-out: got %d continuations, want 2", len(res.Continuations))
+	}
+	got := map[string]bool{}
+	for _, c := range res.Continuations {
+		got[c.RuleID] = true
+	}
+	if !got[r1.ID] || !got[r2.ID] {
+		t.Fatalf("wrong rules fired: %v (want %s and %s)", got, r1.ID, r2.ID)
+	}
+}
