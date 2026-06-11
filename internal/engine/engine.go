@@ -12,6 +12,9 @@ import (
 type Engine struct {
 	Store *store.Store
 	Bus   *bus.Bus
+	// Notify, when set, is called after any ingest that produced
+	// continuations — the dispatcher's wake signal.
+	Notify func()
 }
 
 func New(st *store.Store, b *bus.Bus) *Engine {
@@ -32,5 +35,8 @@ func (e *Engine) Ingest(ev core.Event) (store.IngestResult, error) {
 		return res, err
 	}
 	e.Bus.Publish(res.Event)
+	if e.Notify != nil && len(res.Continuations) > 0 {
+		e.Notify()
+	}
 	return res, nil
 }
