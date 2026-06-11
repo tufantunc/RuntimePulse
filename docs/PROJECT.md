@@ -224,6 +224,8 @@ type Adapter interface {
 | Codex CLI | `codex exec resume <id> --json -C <repo> "<prompt>"` | Needs `--sandbox workspace-write` for edits. No session-list command; ids discovered from `~/.codex/sessions/`. |
 | OpenCode | `opencode run --session <id> --dir <repo> --format json "<prompt>"` | Exit codes unreliable (documented exit-0-on-error history) — parse JSON events. Prefer `opencode serve` + `POST /session/:id/message` when a server runs. |
 
+v1 passes no permission flags on resume; the agent runs with its project-configured permissions (owner decision, 2026-06-11).
+
 Per-CLI details (session id locations, output schemas, auth, MCP registration) are distilled in [`docs/reference/`](reference/README.md), verified 2026-06-11. These surfaces drift; `Validate()` exists precisely because of that.
 
 Future targets: LangGraph agents, AutoGen, custom orchestrators.
@@ -357,9 +359,9 @@ RuntimePulse resumes session → agent reports results
 
 Build order toward the final architecture (each stage lands fully designed, not as a throwaway MVP):
 
-1. **Core:** SQLite store, event bus, rule engine, daemon skeleton + unix socket RPC.
-2. **Watchers:** http, docker, file, process, build, git — with initial-check + edge semantics.
-3. **Continuation:** dispatcher, per-session queues, supervision, Claude Code adapter first, then Cursor/Codex/OpenCode.
+1. ✅ **Core:** SQLite store, event bus, rule engine, daemon skeleton + unix socket RPC.
+2. ✅ **Watchers:** http, docker, file, process, build, git — with initial-check + edge semantics.
+3. ✅ **Continuation:** dispatcher, per-session queues, supervision, Claude Code adapter first, then Cursor/Codex/OpenCode.
 4. **Interfaces:** full CLI surface, MCP server and tools.
 5. **Layers:** workflow YAML compiler, WebSocket streaming (localhost + token), Claude Channels optimization.
 
