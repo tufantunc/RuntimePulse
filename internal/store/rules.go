@@ -15,6 +15,7 @@ func (s *Store) AddRule(r core.Rule) (core.Rule, error) {
 	if r.ActionKind == "" {
 		r.ActionKind = core.ActionContinueSession
 	}
+	r.Consumed = false
 	r.CreatedAt = time.Now().UTC()
 	var expires any
 	if r.ExpiresAt != nil {

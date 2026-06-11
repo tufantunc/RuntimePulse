@@ -3,6 +3,7 @@ package store
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/tufantunc/RuntimePulse/internal/core"
@@ -19,6 +20,9 @@ type execer interface {
 }
 
 func insertEventTx(e execer, ev core.Event) error {
+	if ev.ID == "" {
+		return errors.New("store: event id is required")
+	}
 	payload, err := json.Marshal(ev.Payload)
 	if err != nil {
 		return err
@@ -40,7 +44,7 @@ func (s *Store) ListEvents(evType string, limit int) ([]core.Event, error) {
 		q += `WHERE type = ? `
 		args = append(args, evType)
 	}
-	q += `ORDER BY created_at DESC LIMIT ?`
+	q += `ORDER BY created_at DESC, id DESC LIMIT ?`
 	args = append(args, limit)
 
 	rows, err := s.db.Query(q, args...)

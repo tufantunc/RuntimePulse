@@ -88,9 +88,16 @@ func (s *Store) migrate() error {
 	return err
 }
 
-// ts/parseTS: all times stored as RFC3339Nano UTC strings.
-func ts(t time.Time) string { return t.UTC().Format(time.RFC3339Nano) }
+// tsFormat is fixed-width (nanoseconds never trimmed) so that
+// lexicographic ordering of stored strings == chronological ordering.
+// time.RFC3339Nano would trim trailing zeros and break ORDER BY.
+const tsFormat = "2006-01-02T15:04:05.000000000Z07:00"
 
+// ts/parseTS: all times stored as fixed-width RFC3339 UTC strings.
+func ts(t time.Time) string { return t.UTC().Format(tsFormat) }
+
+// parseTS swallows errors by design: only ts() ever writes these
+// columns. A corrupt row yields the zero time rather than an error.
 func parseTS(v string) time.Time {
 	t, _ := time.Parse(time.RFC3339Nano, v)
 	return t

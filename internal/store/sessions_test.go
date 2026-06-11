@@ -50,4 +50,18 @@ func TestRegisterAndListSessions(t *testing.T) {
 	if got.State != core.SessionQueued {
 		t.Fatalf("state = %s, want queued", got.State)
 	}
+
+	// re-register must return DB truth: state/created_at preserved
+	again, err := s.RegisterSession(core.Session{
+		SessionID: "abc123", Agent: "cursor", RepoPath: "/tmp/repo3",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if again.State != core.SessionQueued {
+		t.Fatalf("re-register returned state %s, want queued (DB truth)", again.State)
+	}
+	if !again.CreatedAt.Equal(got.CreatedAt) {
+		t.Fatalf("re-register changed CreatedAt: %v -> %v", got.CreatedAt, again.CreatedAt)
+	}
 }
