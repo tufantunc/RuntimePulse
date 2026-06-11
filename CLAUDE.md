@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Status
 
-Design phase complete; no source code yet. `go.mod` exists (module `github.com/tufantunc/RuntimePulse`), Go 1.26. Standard commands apply: `go build ./...`, `go test ./...`, `go test -run TestName ./...`, `golangci-lint run`.
+Stages 1–2 implemented and merged to main: core engine (store/bus/engine/daemon/client/CLI) and watchers (http, tcp, file, process, docker, git + `exec` wrapper). Next per spec §13: continuation dispatcher + agent adapters, then MCP server, then workflow YAML/WebSocket.
+
+Commands: `go build ./...`, `go test -race ./...`, `go test -run TestName ./internal/...`, `golangci-lint run`, end-to-end: `./scripts/smoke.sh` (hermetic, must end `SMOKE OK`). Package layout: `internal/core` (domain types), `internal/store` (SQLite, single-connection — NEVER touch `s.db` while a tx is open), `internal/bus`, `internal/engine`, `internal/watch`, `internal/daemon`, `internal/client`, `cmd/runtimepulse`. Continuations currently stop at `pending` (dispatcher is the next stage). Prompts are rendered at ingest and stored on the continuation — the dispatcher must NOT re-render.
 
 Two authoritative documents — read both before designing or implementing anything:
 
