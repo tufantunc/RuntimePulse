@@ -209,6 +209,43 @@ func (d *Daemon) ruleAdd(params json.RawMessage) (any, error) {
 	return d.Engine.Store.AddRule(r)
 }
 
+type notification struct {
+	Method string     `json:"method"`
+	Params core.Event `json:"params"`
+}
+
+// follow streams bus events as notifications until the client
+// disconnects. Bus drops to slow consumers (no gap signal) — clients
+// that need completeness reconcile via events.list.
 func (d *Daemon) follow(conn net.Conn, enc *json.Encoder, req request) {
-	enc.Encode(response{ID: req.ID, Error: "events.follow: not implemented yet"})
+	ch, cancel := d.bus.Subscribe(64)
+	defer cancel()
+	if err := enc.Encode(response{ID: req.ID, Result: "ok"}); err != nil {
+		return
+	}
+	// Detect client disconnect: the client never sends more data on a
+	// follow connection, so a read returning is a hang-up.
+	done := make(chan struct{})
+	go func() {
+		buf := make([]byte, 1)
+		for {
+			if _, err := conn.Read(buf); err != nil {
+				close(done)
+				return
+			}
+		}
+	}()
+	for {
+		select {
+		case ev, ok := <-ch:
+			if !ok {
+				return
+			}
+			if err := enc.Encode(notification{Method: "event", Params: ev}); err != nil {
+				return
+			}
+		case <-done:
+			return
+		}
+	}
 }
