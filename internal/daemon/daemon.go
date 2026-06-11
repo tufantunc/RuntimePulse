@@ -29,10 +29,11 @@ type Daemon struct {
 	Watches  *watch.Manager
 	Dispatch *dispatch.Dispatcher
 
-	store *store.Store
-	bus   *bus.Bus
-	ln    net.Listener
-	lock  *os.File
+	store        *store.Store
+	bus          *bus.Bus
+	ln           net.Listener
+	lock         *os.File
+	dispatchDone chan struct{}
 }
 
 // acquireLock takes an exclusive, non-blocking flock on dir/daemon.lock
@@ -119,7 +120,11 @@ func (d *Daemon) Serve(ctx context.Context) error {
 		return err
 	}
 	d.Watches.Run(ctx, persisted)
-	go d.Dispatch.Run(ctx)
+	d.dispatchDone = make(chan struct{})
+	go func() {
+		d.Dispatch.Run(ctx)
+		close(d.dispatchDone)
+	}()
 	for {
 		conn, err := d.ln.Accept()
 		if err != nil {
@@ -133,6 +138,12 @@ func (d *Daemon) Serve(ctx context.Context) error {
 }
 
 func (d *Daemon) Close() {
+	if d.dispatchDone != nil {
+		select {
+		case <-d.dispatchDone:
+		case <-time.After(10 * time.Second): // agent kill should be near-instant; don't hang forever
+		}
+	}
 	d.ln.Close()
 	d.store.Close()
 	os.Remove(SocketPath(d.Dir))

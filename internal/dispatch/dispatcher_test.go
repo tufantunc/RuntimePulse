@@ -168,6 +168,57 @@ func TestDispatchUnknownAgentFails(t *testing.T) {
 	})
 }
 
+func TestShutdownLeavesInFlightRunning(t *testing.T) {
+	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	b := bus.New()
+	eng := engine.New(st, b)
+	fake := adapter.NewFake()
+	fake.SetDelay(10 * time.Second) // long-running agent turn
+	d := New(st, adapter.Registry{"fake": fake}, eng.Ingest)
+	eng.Notify = d.Wake
+
+	if _, err := st.RegisterSession(core.Session{SessionID: "sess-1", Agent: "fake", RepoPath: "/tmp"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := st.AddRule(core.Rule{
+		Selector: core.EventSelector{Type: "tcp.available"}, SessionID: "sess-1", PromptTemplate: "go",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() { d.Run(ctx); close(done) }()
+
+	eng.Ingest(core.Event{Type: "tcp.available", Source: "x"})
+	waitFor(t, "continuation claimed", func() bool {
+		running, _ := st.ListContinuations("running")
+		return len(running) == 1
+	})
+
+	cancel() // graceful shutdown mid-run
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("Run did not drain workers on shutdown")
+	}
+
+	running, _ := st.ListContinuations("running")
+	failed, _ := st.ListContinuations("failed")
+	if len(running) != 1 || len(failed) != 0 {
+		t.Fatalf("shutdown must leave in-flight work running for recovery: running=%d failed=%d",
+			len(running), len(failed))
+	}
+	evs, _ := st.ListEvents("continuation.failed", 10)
+	if len(evs) != 0 {
+		t.Fatal("shutdown must not emit continuation.failed events")
+	}
+}
+
 func TestBootRecovery(t *testing.T) {
 	// store with an orphaned running continuation, dispatcher started after
 	st, err := store.Open(filepath.Join(t.TempDir(), "t.db"))

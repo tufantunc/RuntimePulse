@@ -5,7 +5,9 @@ package dispatch
 import (
 	"context"
 	"log"
+	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -34,8 +36,8 @@ type Dispatcher struct {
 	wake chan struct{}
 
 	mu      sync.Mutex
-	ctx     context.Context
 	workers map[string]bool // sessionID → worker alive
+	wg      sync.WaitGroup
 }
 
 func New(st *store.Store, reg adapter.Registry, ingest IngestFunc) *Dispatcher {
@@ -58,10 +60,6 @@ func (d *Dispatcher) Wake() {
 
 // Run recovers orphaned work, then dispatches until ctx is cancelled.
 func (d *Dispatcher) Run(ctx context.Context) {
-	d.mu.Lock()
-	d.ctx = ctx
-	d.mu.Unlock()
-
 	if n, err := d.store.ResetRunningContinuations(); err != nil {
 		log.Printf("dispatch: boot recovery failed: %v", err)
 	} else if n > 0 {
@@ -74,6 +72,7 @@ func (d *Dispatcher) Run(ctx context.Context) {
 		d.scan(ctx)
 		select {
 		case <-ctx.Done():
+			d.wg.Wait() // workers exit fast: runCtx is derived, the agent process is killed
 			return
 		case <-d.wake:
 		case <-ticker.C:
@@ -96,6 +95,7 @@ func (d *Dispatcher) scan(ctx context.Context) {
 			continue
 		}
 		d.workers[sessionID] = true
+		d.wg.Add(1)
 		go d.worker(ctx, sessionID)
 	}
 }
@@ -106,6 +106,7 @@ func (d *Dispatcher) worker(ctx context.Context, sessionID string) {
 		delete(d.workers, sessionID)
 		d.mu.Unlock()
 		d.Wake() // close the worker-exit race: rescan after deregistering
+		d.wg.Done()
 	}()
 	for ctx.Err() == nil {
 		c, ok, err := d.store.NextPendingForSession(sessionID)
@@ -140,14 +141,18 @@ func (d *Dispatcher) execute(ctx context.Context, c core.Continuation) {
 	default:
 		ad, ok := d.adapters[sess.Agent]
 		if !ok {
-			summary = "no adapter for agent " + sess.Agent + " (available: claude)"
+			summary = "no adapter for agent " + sess.Agent + " (available: " + registryKeys(d.adapters) + ")"
 			break
 		}
-		d.store.SetSessionState(sess.SessionID, core.SessionRunning)
+		if err := d.store.SetSessionState(sess.SessionID, core.SessionRunning); err != nil {
+			log.Printf("dispatch: %s: set session running: %v", sess.SessionID, err)
+		}
 		runCtx, cancel := context.WithTimeout(ctx, resumeTimeout)
 		res, runErr := ad.Resume(runCtx, sess, c.Prompt)
 		cancel()
-		d.store.SetSessionState(sess.SessionID, core.SessionWaiting)
+		if err := d.store.SetSessionState(sess.SessionID, core.SessionWaiting); err != nil {
+			log.Printf("dispatch: %s: set session waiting: %v", sess.SessionID, err)
+		}
 
 		command, summary, durationMs = res.Command, res.OutputSummary, res.DurationMs
 		ec := res.ExitCode
@@ -159,10 +164,28 @@ func (d *Dispatcher) execute(ctx context.Context, c core.Continuation) {
 		}
 	}
 
+	// Shutdown is not a verdict: leave the row running for boot
+	// recovery instead of recording a spurious failure or firing
+	// user rules mid-shutdown.
+	if ctx.Err() != nil {
+		log.Printf("dispatch: %s interrupted by shutdown; will re-run after restart", c.ID)
+		return
+	}
+
 	if err := d.store.UpdateContinuationResult(c.ID, state, command, exitCode, summary); err != nil {
 		log.Printf("dispatch: %s: record result: %v", c.ID, err)
 	}
 	d.emitResult(c, state, exitCode, durationMs)
+}
+
+// registryKeys returns a sorted, comma-joined list of adapter names.
+func registryKeys(reg adapter.Registry) string {
+	keys := make([]string, 0, len(reg))
+	for k := range reg {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return strings.Join(keys, ", ")
 }
 
 // emitResult publishes continuation.completed/failed with the rule's
