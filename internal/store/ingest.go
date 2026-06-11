@@ -59,7 +59,7 @@ func (s *Store) Ingest(ev core.Event) (IngestResult, error) {
 	for _, r := range matched {
 		c := core.Continuation{
 			ID: core.NewID("cont"), RuleID: r.ID, EventID: ev.ID, SessionID: r.SessionID,
-			State: core.ContinuationPending, CreatedAt: now, UpdatedAt: now,
+			Label: r.Label, State: core.ContinuationPending, CreatedAt: now, UpdatedAt: now,
 		}
 		prompt, err := r.RenderPrompt(ev)
 		if err != nil {
@@ -70,9 +70,9 @@ func (s *Store) Ingest(ev core.Event) (IngestResult, error) {
 		}
 		ins, err := tx.Exec(`
 			INSERT OR IGNORE INTO continuations
-			  (id, rule_id, event_id, session_id, prompt, state, output_summary, created_at, updated_at)
-			VALUES (?,?,?,?,?,?,?,?,?)`,
-			c.ID, c.RuleID, c.EventID, c.SessionID, c.Prompt, string(c.State),
+			  (id, rule_id, event_id, session_id, prompt, label, state, output_summary, created_at, updated_at)
+			VALUES (?,?,?,?,?,?,?,?,?,?)`,
+			c.ID, c.RuleID, c.EventID, c.SessionID, c.Prompt, c.Label, string(c.State),
 			c.OutputSummary, ts(now), ts(now))
 		if err != nil {
 			return res, err
@@ -100,7 +100,7 @@ func (s *Store) Ingest(ev core.Event) (IngestResult, error) {
 
 // ListContinuations returns continuations, optionally filtered by state.
 func (s *Store) ListContinuations(state string) ([]core.Continuation, error) {
-	q := `SELECT id, rule_id, event_id, session_id, prompt, state, command,
+	q := `SELECT id, rule_id, event_id, session_id, prompt, label, state, command,
 	             exit_code, output_summary, created_at, updated_at
 	      FROM continuations`
 	args := []any{}
@@ -119,7 +119,7 @@ func (s *Store) ListContinuations(state string) ([]core.Continuation, error) {
 		var c core.Continuation
 		var st, created, updated string
 		var exit *int
-		if err := rows.Scan(&c.ID, &c.RuleID, &c.EventID, &c.SessionID, &c.Prompt,
+		if err := rows.Scan(&c.ID, &c.RuleID, &c.EventID, &c.SessionID, &c.Prompt, &c.Label,
 			&st, &c.Command, &exit, &c.OutputSummary, &created, &updated); err != nil {
 			return nil, err
 		}

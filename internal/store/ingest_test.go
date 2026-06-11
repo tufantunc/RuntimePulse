@@ -112,6 +112,26 @@ func TestIngestRenderErrorYieldsFailedContinuation(t *testing.T) {
 	}
 }
 
+func TestIngestDenormalizesRuleLabel(t *testing.T) {
+	s := openTestStore(t)
+	mustAddRule(t, s, core.Rule{
+		Selector: core.EventSelector{Type: "docker.healthy"}, SessionID: "abc123",
+		PromptTemplate: "go", Label: "step-1",
+	})
+	res := ingestEvent(t, s, "evt-1")
+	if len(res.Continuations) != 1 || res.Continuations[0].Label != "step-1" {
+		t.Fatalf("continuation must carry the rule label: %#v", res.Continuations)
+	}
+	// round-trips through the store
+	all, err := s.ListContinuations("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if all[0].Label != "step-1" {
+		t.Fatalf("label lost in storage: %#v", all[0])
+	}
+}
+
 func TestIngestFanOut(t *testing.T) {
 	s := openTestStore(t)
 	r1 := mustAddRule(t, s, core.Rule{

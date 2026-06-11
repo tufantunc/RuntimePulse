@@ -3,6 +3,7 @@ package store
 
 import (
 	"database/sql"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -72,6 +73,7 @@ CREATE TABLE IF NOT EXISTS continuations (
   event_id       TEXT NOT NULL,
   session_id     TEXT NOT NULL,
   prompt         TEXT NOT NULL,
+  label          TEXT NOT NULL DEFAULT '',
   state          TEXT NOT NULL DEFAULT 'pending',
   command        TEXT NOT NULL DEFAULT '',
   exit_code      INTEGER,
@@ -93,8 +95,16 @@ CREATE TABLE IF NOT EXISTS watches (
 `
 
 func (s *Store) migrate() error {
-	_, err := s.db.Exec(schema)
-	return err
+	if _, err := s.db.Exec(schema); err != nil {
+		return err
+	}
+	// Additive migrations for databases created by earlier versions.
+	// "duplicate column name" means the column already exists — fine.
+	if _, err := s.db.Exec(`ALTER TABLE continuations ADD COLUMN label TEXT NOT NULL DEFAULT ''`); err != nil &&
+		!strings.Contains(err.Error(), "duplicate column name") {
+		return err
+	}
+	return nil
 }
 
 // tsFormat is fixed-width (nanoseconds never trimmed) so that
