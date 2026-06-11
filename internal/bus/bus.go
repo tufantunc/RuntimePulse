@@ -20,7 +20,12 @@ func New() *Bus {
 
 // Subscribe returns a buffered channel and a cancel func. Cancel closes
 // the channel and unregisters it; calling cancel twice is safe.
+// An unbuffered subscriber would miss nearly every event under
+// non-blocking publish, so buffers below 1 are raised to 1.
 func (b *Bus) Subscribe(buffer int) (<-chan core.Event, func()) {
+	if buffer < 1 {
+		buffer = 1
+	}
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	id := b.next
