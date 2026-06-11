@@ -29,6 +29,15 @@ func TestHTTPProber(t *testing.T) {
 	if !p(ctx) {
 		t.Fatal("3xx must be available")
 	}
+	// A real redirect must NOT be followed: target answering 302 with a
+	// dead Location is still "available" (the target itself responded).
+	redirecting := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://127.0.0.1:1/dead", http.StatusFound)
+	}))
+	defer redirecting.Close()
+	if !HTTPProber(redirecting.URL)(ctx) {
+		t.Fatal("redirect to dead target must still count as available")
+	}
 	code.Store(500)
 	if p(ctx) {
 		t.Fatal("5xx must be unavailable")

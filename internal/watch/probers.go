@@ -10,9 +10,16 @@ import (
 
 const probeTimeout = 2 * time.Second
 
-// HTTPProber: available = the target answers with a 2xx/3xx status.
+// HTTPProber: available = the target ITSELF answers with a 2xx/3xx
+// status. Redirects are not followed — an app that 302s "/" → "/login"
+// is up; the redirect target's health is not this watch's business.
 func HTTPProber(url string) Prober {
-	client := &http.Client{Timeout: probeTimeout}
+	client := &http.Client{
+		Timeout: probeTimeout,
+		CheckRedirect: func(*http.Request, []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	return func(ctx context.Context) bool {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 		if err != nil {
@@ -22,6 +29,8 @@ func HTTPProber(url string) Prober {
 		if err != nil {
 			return false
 		}
+		// Close without draining: the connection is not reused, which is
+		// deliberate — each probe is a fresh, honest liveness check.
 		resp.Body.Close()
 		return resp.StatusCode >= 200 && resp.StatusCode < 400
 	}
