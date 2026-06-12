@@ -33,7 +33,11 @@ func runCLI(ctx context.Context, bin string, args []string, dir string, parse fu
 	}
 	res.OutputSummary = parse(stdout.Bytes())
 	if res.OutputSummary == "" {
-		res.OutputSummary = truncate(strings.TrimSpace(stderr.String()))
+		// Marked so a fallback summary is never mistaken for an agent
+		// message — especially on a SUCCESSFUL run with empty stdout.
+		if tail := truncate(strings.TrimSpace(stderr.String())); tail != "" {
+			res.OutputSummary = "(stderr) " + tail
+		}
 	}
 
 	if err != nil {
