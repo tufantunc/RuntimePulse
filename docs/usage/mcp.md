@@ -14,6 +14,23 @@ Detects which agent CLIs are installed (Claude Code, Cursor, Codex, OpenCode), s
 
 The sections below are the manual per-agent reference if you prefer to register by hand.
 
+### Installing the release-and-resume guidance
+
+`runtimepulse setup` can also write a short rule into each agent's **global**
+instruction file so the agent reaches for RuntimePulse on its own when it needs
+to wait for a runtime condition (instead of polling or blocking):
+
+- Claude → `~/.claude/CLAUDE.md`
+- Codex → `~/.codex/AGENTS.md`
+- opencode → `~/.config/opencode/AGENTS.md`
+- Cursor → printed for you to paste into **Settings → Rules → User Rules**
+  (Cursor's global rules are not file-writable from the CLI)
+
+It is opt-in: the wizard asks before writing (default no). Non-interactively,
+pass `--rules` to write or `--no-rules` to skip. The write is idempotent — a
+managed, marker-delimited block refreshed in place on re-runs that never
+disturbs your existing content. Combine with `--dry-run` to preview.
+
 ## Registering with your agent
 
 **Claude Code:**

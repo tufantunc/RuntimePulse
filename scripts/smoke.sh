@@ -198,6 +198,22 @@ has "already registered" cat "$dir/setup-2.txt" || { echo "FAIL: re-run not repo
 PATH="$fake_home/bin:$PATH" HOME="$fake_home" "$rp" setup --agent cursor,opencode --dry-run > "$dir/setup-list.txt"
 has cursor cat "$dir/setup-list.txt" || { echo "FAIL: setup --agent list dry-run did not mention cursor"; exit 1; }
 
+# --- setup --rules --dry-run is inert: previews the guidance, writes nothing ---
+# Throwaway HOME so it can't touch anything real. cursor is "installed" via the
+# stub above, so we expect the dry-run preview; tolerate the no-agents path too.
+rules_home="$dir/rules-home"
+mkdir -p "$rules_home/bin"
+printf '#!/bin/sh\nexit 0\n' > "$rules_home/bin/agent"
+chmod +x "$rules_home/bin/agent"
+PATH="$rules_home/bin:$PATH" HOME="$rules_home" "$rp" setup --all --rules --dry-run > "$dir/setup-rules.txt" 2>&1
+if has dry-run cat "$dir/setup-rules.txt" || has "No target agent" cat "$dir/setup-rules.txt"; then :; else
+  echo "FAIL: setup --rules --dry-run produced no recognizable output"; cat "$dir/setup-rules.txt"; exit 1
+fi
+if [ -e "$rules_home/.claude/CLAUDE.md" ] || [ -e "$rules_home/.codex/AGENTS.md" ] || [ -e "$rules_home/.config/opencode/AGENTS.md" ]; then
+  echo "FAIL: setup --rules --dry-run wrote an instruction file"; exit 1
+fi
+echo "setup --rules dry-run OK"
+
 # --- MCP server: stdio handshake lists the five tools ---
 mcp_in="$dir/mcp_in.jsonl"
 cat > "$mcp_in" << 'JSONL'
