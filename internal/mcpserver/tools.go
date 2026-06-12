@@ -72,3 +72,34 @@ func cancelRuleHandler(c *client.Client) mcp.ToolHandlerFor[CancelRuleInput, OKO
 		return nil, OKOutput{OK: true}, nil
 	}
 }
+
+// --- create_rule ------------------------------------------------------
+
+type CreateRuleInput struct {
+	EventType string `json:"eventType" jsonschema:"event type to match, e.g. docker.healthy or continuation.completed"`
+	Source    string `json:"source,omitempty" jsonschema:"optional event source filter, e.g. a container name"`
+	SessionID string `json:"sessionId" jsonschema:"the agent session to resume when the event matches"`
+	Agent     string `json:"agent,omitempty" jsonschema:"agent type (claude|cursor|codex|opencode); with repoPath, self-registers the session"`
+	RepoPath  string `json:"repoPath,omitempty" jsonschema:"session repo path; with agent, self-registers the session"`
+	Prompt    string `json:"prompt" jsonschema:"Go text/template prompt; only event fields are available, e.g. {{.Event.Source}}"`
+	Label     string `json:"label,omitempty" jsonschema:"rule label; becomes the source of the continuation.* result event"`
+	OneShot   bool   `json:"oneShot,omitempty" jsonschema:"consume the rule after its first match"`
+	ExpiresAt string `json:"expiresAt,omitempty" jsonschema:"optional RFC3339 expiry"`
+}
+
+type RuleOutput struct {
+	ID        string `json:"id"`
+	SessionID string `json:"sessionId"`
+}
+
+func createRuleHandler(c *client.Client) mcp.ToolHandlerFor[CreateRuleInput, RuleOutput] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in CreateRuleInput) (*mcp.CallToolResult, RuleOutput, error) {
+		var out RuleOutput
+		err := c.Call("rule.add", map[string]any{
+			"type": in.EventType, "source": in.Source,
+			"sessionId": in.SessionID, "agent": in.Agent, "repoPath": in.RepoPath,
+			"prompt": in.Prompt, "label": in.Label, "oneShot": in.OneShot, "expiresAt": in.ExpiresAt,
+		}, &out)
+		return nil, out, err
+	}
+}

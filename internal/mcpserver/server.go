@@ -31,4 +31,9 @@ func registerTools(srv *mcp.Server, c *client.Client) {
 	mcp.AddTool(srv, &mcp.Tool{
 		Name: "cancel_rule", Description: "Cancel a pending rule by id.",
 	}, cancelRuleHandler(c))
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "create_rule",
+		Description: "Bind an event to a session resume: when eventType (optionally from source) fires, " +
+			"resume sessionId with the rendered prompt. Pass agent+repoPath to register the session in the same call.",
+	}, createRuleHandler(c))
 }

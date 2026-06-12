@@ -86,3 +86,39 @@ func TestCancelRuleTool(t *testing.T) {
 		t.Fatalf("rule not cancelled: %v", rules)
 	}
 }
+
+func TestCreateRuleSelfRegisters(t *testing.T) {
+	c := newTestDaemonClient(t)
+	h := createRuleHandler(c)
+	_, out, err := h(context.Background(), nil, CreateRuleInput{
+		EventType: "docker.healthy", Source: "postgres",
+		SessionID: "abc123", Agent: "claude", RepoPath: "/tmp/x",
+		Prompt: "{{.Event.Source}} healthy. Continue.", Label: "step-1", OneShot: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.ID == "" {
+		t.Fatalf("rule not created: %#v", out)
+	}
+	// session was registered as a side effect
+	var sessions []map[string]any
+	if err := c.Call("session.list", nil, &sessions); err != nil {
+		t.Fatal(err)
+	}
+	if len(sessions) != 1 || sessions[0]["sessionId"] != "abc123" {
+		t.Fatalf("self-registration failed: %v", sessions)
+	}
+}
+
+func TestCreateRuleBadTemplateIsToolError(t *testing.T) {
+	c := newTestDaemonClient(t)
+	h := createRuleHandler(c)
+	_, _, err := h(context.Background(), nil, CreateRuleInput{
+		EventType: "docker.healthy", SessionID: "abc123", Agent: "claude", RepoPath: "/tmp/x",
+		Prompt: "{{.Event.Bad", // syntax error
+	})
+	if err == nil {
+		t.Fatal("bad template must surface as a tool error")
+	}
+}
