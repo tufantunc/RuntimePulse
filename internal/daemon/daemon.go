@@ -23,6 +23,16 @@ import (
 	"github.com/tufantunc/RuntimePulse/internal/wsserver"
 )
 
+// Retention windows (owner decision: fixed, no flags). The sweeper
+// removes idle sessions only when no active rule references them and
+// they are not running; terminal continuations and events age out.
+const (
+	sessionIdleRetention  = 7 * 24 * time.Hour
+	continuationRetention = 30 * 24 * time.Hour
+	eventRetention        = 30 * 24 * time.Hour
+	sweepInterval         = time.Hour
+)
+
 type Daemon struct {
 	Dir      string
 	Engine   *engine.Engine
@@ -90,6 +100,24 @@ func New(dir string) (*Daemon, error) {
 	return &Daemon{Dir: dir, Engine: eng, Watches: mgr, Dispatch: disp, store: st, bus: b, ln: ln, lock: lock, dispatchDone: make(chan struct{})}, nil
 }
 
+// sweepOnce runs one retention sweep; errors are logged, never fatal
+// (the next tick retries).
+func (d *Daemon) sweepOnce() {
+	res, err := d.store.Sweep(time.Now().UTC(), store.RetentionPolicy{
+		SessionIdle:     sessionIdleRetention,
+		ContinuationAge: continuationRetention,
+		EventAge:        eventRetention,
+	})
+	if err != nil {
+		log.Printf("retention sweep failed: %v", err)
+		return
+	}
+	if res.Sessions+res.Continuations+res.Events > 0 {
+		log.Printf("retention sweep: sessions=%d continuations=%d events=%d",
+			res.Sessions, res.Continuations, res.Events)
+	}
+}
+
 // removeStaleSocket deletes a socket file nobody is listening on.
 func removeStaleSocket(path string) {
 	if _, err := os.Stat(path); err != nil {
@@ -118,6 +146,19 @@ func (d *Daemon) Serve(ctx context.Context) error {
 	go func() {
 		d.Dispatch.Run(ctx)
 		close(d.dispatchDone)
+	}()
+	go func() {
+		d.sweepOnce() // boot sweep
+		ticker := time.NewTicker(sweepInterval)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				d.sweepOnce()
+			}
+		}
 	}()
 	for {
 		conn, err := d.ln.Accept()
