@@ -63,3 +63,20 @@ func contains(ss []string, s string) bool {
 	}
 	return false
 }
+
+func TestNativeRegisterToleratesAlreadyExists(t *testing.T) {
+	rec := &recordCmd{err: &execError{out: "MCP server runtimepulse already exists in local config"}}
+	a := claudeAgent{run: rec.run}
+	if err := a.Register("/abs/runtimepulse", ScopeUser); err != nil {
+		t.Fatalf("already-exists must be treated as success: %v", err)
+	}
+	rec2 := &recordCmd{err: &execError{out: "some real failure"}}
+	b := codexAgent{run: rec2.run}
+	if err := b.Register("/abs/runtimepulse", ScopeUser); err == nil {
+		t.Fatal("a real failure must still error")
+	}
+}
+
+type execError struct{ out string }
+
+func (e *execError) Error() string { return e.out }

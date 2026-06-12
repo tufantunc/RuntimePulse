@@ -2,6 +2,7 @@ package setup
 
 import (
 	"bytes"
+	"fmt"
 	"os/exec"
 	"strings"
 )
@@ -9,9 +10,27 @@ import (
 // runFunc runs an agent CLI subcommand; injectable for tests.
 type runFunc func(name string, args ...string) error
 
-// execRun is the production runFunc.
+// execRun runs the command, folding its combined output into the error
+// so a failed `mcp add` produces an actionable message, not "exit 1".
 func execRun(name string, args ...string) error {
-	return exec.Command(name, args...).Run()
+	out, err := execQuery(name, args...)
+	if err != nil {
+		msg := strings.TrimSpace(out)
+		if msg == "" {
+			return err
+		}
+		return fmt.Errorf("%w: %s", err, msg)
+	}
+	return nil
+}
+
+// tolerateExists returns nil when err describes an "already exists"
+// condition; the spec requires this to be treated as success.
+func tolerateExists(err error) error {
+	if err != nil && strings.Contains(strings.ToLower(err.Error()), "already exists") {
+		return nil
+	}
+	return err
 }
 
 // queryFunc returns an agent CLI subcommand's combined output; injectable.
@@ -64,8 +83,9 @@ func (a claudeAgent) Register(binPath string, scope Scope) error {
 	if scope == ScopeProject {
 		scopeName = "project"
 	}
-	return run("claude", "mcp", "add", "--transport", "stdio", "--scope", scopeName,
+	err := run("claude", "mcp", "add", "--transport", "stdio", "--scope", scopeName,
 		"runtimepulse", "--", binPath, "mcp")
+	return tolerateExists(err)
 }
 
 // --- Codex: `codex mcp add` (global only in v1) ---
@@ -105,5 +125,6 @@ func (a codexAgent) Register(binPath string, scope Scope) error {
 	if run == nil {
 		run = execRun
 	}
-	return run("codex", "mcp", "add", "runtimepulse", "--", binPath, "mcp")
+	err := run("codex", "mcp", "add", "runtimepulse", "--", binPath, "mcp")
+	return tolerateExists(err)
 }

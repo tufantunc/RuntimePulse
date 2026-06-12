@@ -3,6 +3,7 @@
 package setup
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -16,7 +17,9 @@ import (
 func mergeJSONServer(path, section, name string, entry map[string]any) error {
 	root := map[string]any{}
 	if b, err := os.ReadFile(path); err == nil {
-		if err := json.Unmarshal(b, &root); err != nil {
+		dec := json.NewDecoder(bytes.NewReader(b))
+		dec.UseNumber()
+		if err := dec.Decode(&root); err != nil {
 			return fmt.Errorf("setup: %s is not valid JSON, leaving it untouched: %w", path, err)
 		}
 	} else if !os.IsNotExist(err) {

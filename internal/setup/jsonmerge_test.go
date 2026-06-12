@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -84,6 +85,21 @@ func TestMergeRefusesUnparseableFile(t *testing.T) {
 	b, _ := os.ReadFile(path)
 	if string(b) != "{ not json" {
 		t.Fatalf("clobbered the bad file: %s", b)
+	}
+}
+
+func TestMergePreservesLargeIntegers(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "mcp.json")
+	seed := `{"mcp":{"other":{"port":1152921504606846976}}}`
+	if err := os.WriteFile(path, []byte(seed), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := mergeJSONServer(path, "mcp", "runtimepulse", map[string]any{"command": "x"}); err != nil {
+		t.Fatal(err)
+	}
+	b, _ := os.ReadFile(path)
+	if !strings.Contains(string(b), "1152921504606846976") {
+		t.Fatalf("large integer mangled: %s", b)
 	}
 }
 

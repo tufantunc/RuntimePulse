@@ -1,6 +1,6 @@
 package setup
 
-import "os"
+import "fmt"
 
 // Scope selects user/global vs current-project registration.
 type Scope int
@@ -87,7 +87,7 @@ func Run(agents []Agent, names []string, binPath string, scope Scope) []Result {
 		st := a.Status(scope)
 		switch {
 		case !st.Installed:
-			res.Err = os.ErrNotExist
+			res.Err = fmt.Errorf("%s CLI not found on PATH", a.Name())
 		case st.Registered:
 			res.OK, res.Skipped = true, true
 		default:
