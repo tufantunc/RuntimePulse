@@ -11,7 +11,8 @@ import (
 )
 
 func daemonCmd() *cobra.Command {
-	return &cobra.Command{
+	var wsPort int
+	c := &cobra.Command{
 		Use:   "daemon",
 		Short: "Run the RuntimePulse daemon in the foreground",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -26,8 +27,15 @@ func daemonCmd() *cobra.Command {
 			defer d.Close()
 			ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 			defer stop()
+			if wsPort > 0 {
+				if _, err := d.ServeWS(ctx, wsPort); err != nil {
+					return fmt.Errorf("starting ws server: %w", err)
+				}
+			}
 			fmt.Printf("runtimepulse daemon %s listening on %s\n", daemon.Version, daemon.SocketPath(dir))
 			return d.Serve(ctx)
 		},
 	}
+	c.Flags().IntVar(&wsPort, "ws-port", 0, "opt-in WebSocket event stream port (0 = disabled)")
+	return c
 }

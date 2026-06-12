@@ -92,10 +92,18 @@ has smoke-build "$rp" events --type exec.failed || { echo "FAIL: exec.failed mis
 # --- watch survives daemon restart (re-arm) ---
 has '"type":"file"' "$rp" watch list || { echo "FAIL: watch not persisted"; exit 1; }
 kill $dpid && wait $dpid 2>/dev/null || true
-"$rp" daemon >"$dir/daemon-out2.log" 2>&1 &
+ws_port=$((20000 + $$ % 20000))
+"$rp" daemon --ws-port "$ws_port" >"$dir/daemon-out2.log" 2>&1 &
 dpid=$!
 sleep 0.5
 has '"type":"file"' "$rp" watch list || { echo "FAIL: watch lost after restart"; exit 1; }
+
+# --- ws: opt-in stream is loopback + token gated ---
+ws_code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$ws_port/events")
+[ "$ws_code" = "401" ] || { echo "FAIL: ws without token must 401, got $ws_code"; exit 1; }
+ws_token=$(cat "$dir/ws-token")
+ws_code=$(curl -s -o /dev/null -w '%{http_code}' "http://127.0.0.1:$ws_port/events?token=$ws_token")
+[ "$ws_code" != "401" ] || { echo "FAIL: ws with token must pass auth"; exit 1; }
 
 # --- dispatcher: event → resume (mock claude) → chained second step ---
 "$rp" session register --agent claude --session smoke-3 --repo "$dir"

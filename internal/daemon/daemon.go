@@ -3,11 +3,14 @@ package daemon
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -19,6 +22,7 @@ import (
 	"github.com/tufantunc/RuntimePulse/internal/engine"
 	"github.com/tufantunc/RuntimePulse/internal/store"
 	"github.com/tufantunc/RuntimePulse/internal/watch"
+	"github.com/tufantunc/RuntimePulse/internal/wsserver"
 )
 
 const Version = "0.1.0-dev"
@@ -98,7 +102,7 @@ func New(dir string) (*Daemon, error) {
 		"opencode": adapter.OpenCode{},
 	}, eng.Ingest)
 	eng.Notify = disp.Wake
-	return &Daemon{Dir: dir, Engine: eng, Watches: mgr, Dispatch: disp, store: st, bus: b, ln: ln, lock: lock}, nil
+	return &Daemon{Dir: dir, Engine: eng, Watches: mgr, Dispatch: disp, store: st, bus: b, ln: ln, lock: lock, dispatchDone: make(chan struct{})}, nil
 }
 
 // removeStaleSocket deletes a socket file nobody is listening on.
@@ -125,7 +129,6 @@ func (d *Daemon) Serve(ctx context.Context) error {
 		return err
 	}
 	d.Watches.Run(ctx, persisted)
-	d.dispatchDone = make(chan struct{})
 	go func() {
 		d.Dispatch.Run(ctx)
 		close(d.dispatchDone)
@@ -143,14 +146,45 @@ func (d *Daemon) Serve(ctx context.Context) error {
 }
 
 func (d *Daemon) Close() {
-	if d.dispatchDone != nil {
-		select {
-		case <-d.dispatchDone:
-		case <-time.After(10 * time.Second): // agent kill should be near-instant; don't hang forever
-		}
+	select {
+	case <-d.dispatchDone:
+	case <-time.After(10 * time.Second): // agent kill should be near-instant; don't hang forever
 	}
 	d.ln.Close()
 	d.store.Close()
 	os.Remove(SocketPath(d.Dir))
 	d.lock.Close()
+}
+
+// ServeWS starts the optional WebSocket event stream (spec §9: opt-in,
+// loopback-only, token-gated). The token persists in <dir>/ws-token
+// (0600) so external consumers can read it across daemon restarts.
+func (d *Daemon) ServeWS(ctx context.Context, port int) (string, error) {
+	token, err := loadOrCreateToken(filepath.Join(d.Dir, "ws-token"))
+	if err != nil {
+		return "", err
+	}
+	addr, err := wsserver.Start(ctx, port, token, d.bus)
+	if err != nil {
+		return "", err
+	}
+	log.Printf("ws: streaming events on ws://%s/events (token: %s/ws-token)", addr, d.Dir)
+	return addr, nil
+}
+
+func loadOrCreateToken(path string) (string, error) {
+	if data, err := os.ReadFile(path); err == nil {
+		if tok := strings.TrimSpace(string(data)); tok != "" {
+			return tok, nil
+		}
+	}
+	raw := make([]byte, 16)
+	if _, err := rand.Read(raw); err != nil {
+		return "", err
+	}
+	tok := hex.EncodeToString(raw)
+	if err := os.WriteFile(path, []byte(tok+"\n"), 0o600); err != nil {
+		return "", err
+	}
+	return tok, nil
 }

@@ -238,6 +238,7 @@ Future targets: LangGraph agents, AutoGen, custom orchestrators.
 
 ```bash
 runtimepulse daemon                 # run the daemon in foreground (also auto-started)
+runtimepulse daemon --ws-port 8787   # opt-in event stream (127.0.0.1, token in ~/.runtimepulse/ws-token)
 runtimepulse status                 # daemon + watch + session overview
 
 runtimepulse watch add http --url http://localhost:3000
@@ -298,6 +299,7 @@ Multi-step chains are declared in YAML and compiled to rules by `runtimepulse ap
 # workflow.yaml
 session: abc123
 agent: claude
+repo: /path/to/repo   # optional: session's repoPath; defaults to cwd of `apply`
 steps:
   - label: step-1
     on: { type: docker.healthy, source: postgres }
@@ -310,6 +312,8 @@ steps:
     prompt: "Tests finished. Report the results."
 ```
 
+`runtimepulse apply workflow.yaml` compiles all steps to oneShot rules in order. On partial failure (e.g. a bad prompt template on step 3 of 5), the already-created rules are removed best-effort and the command errors — a crashed apply can leak rules; use `rule list` and `rule remove` to inspect.
+
 ## 8. Storage
 
 Single SQLite database (WAL mode), CGO-free driver (`modernc.org/sqlite`). Tables: `events`, `watches`, `rules`, `sessions`, `continuations`. Events are pruned automatically (configurable retention, default 30 days or size cap). The unix socket and database live under `~/.runtimepulse/`.
@@ -319,7 +323,7 @@ Single SQLite database (WAL mode), CGO-free driver (`modernc.org/sqlite`). Table
 Local, single-user developer machine by assumption (documented, not accidental):
 
 * The daemon listens **only** on a unix socket with mode 0600. No TCP port by default.
-* Future WebSocket streaming binds to `127.0.0.1` only and requires a token.
+* The opt-in WebSocket event stream (`--ws-port`) binds to `127.0.0.1` only and requires a token (stored in `~/.runtimepulse/ws-token`, mode 0600).
 * Prompt templates are authored by the rule creator; template context exposes only machine-generated event fields. RuntimePulse never forwards arbitrary external text into an agent prompt.
 * Continuations execute agent CLIs as the daemon's own user; RuntimePulse adds no privilege boundary.
 
@@ -367,7 +371,7 @@ Build order toward the final architecture (each stage lands fully designed, not 
 2. ✅ **Watchers:** http, docker, file, process, build, git — with initial-check + edge semantics.
 3. ✅ **Continuation:** dispatcher, per-session queues, supervision, Claude Code adapter first, ✅ Cursor/Codex/OpenCode adapters (all four share one supervised CLI runner; registry wired in daemon).
 4. **Interfaces:** ✅ full CLI surface (stages 1–3), ✅ MCP server and tools (`create_watch`, `create_rule`, `wait_for_event`, `get_events`, `cancel_rule`) over stdio.
-5. **Layers:** workflow YAML compiler, WebSocket streaming (localhost + token), Claude Channels optimization.
+5. ✅ **Layers:** ✅ workflow YAML compiler (`runtimepulse apply`, `internal/workflow`), ✅ WebSocket streaming (127.0.0.1 + token, `internal/wsserver`, `daemon --ws-port`). Claude Channels optimization deferred while the feature is a research preview.
 
 ## 14. Design Decisions
 
