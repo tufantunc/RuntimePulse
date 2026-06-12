@@ -19,7 +19,7 @@ func main() {
 		SilenceUsage:  true,
 		SilenceErrors: false,
 	}
-	root.AddCommand(daemonCmd(), statusCmd(), eventsCmd(), ruleCmd(), sessionCmd(), injectCmd(), watchCmd(), execCmd(), continueCmd(), continuationsCmd(), mcpCmd())
+	root.AddCommand(daemonCmd(), statusCmd(), eventsCmd(), ruleCmd(), sessionCmd(), injectCmd(), watchCmd(), execCmd(), continueCmd(), continuationsCmd(), mcpCmd(), applyCmd())
 	if err := root.Execute(); err != nil {
 		os.Exit(1)
 	}

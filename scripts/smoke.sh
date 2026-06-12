@@ -135,6 +135,41 @@ for _ in $(seq 1 25); do
 done
 [ -n "$curdone" ] || { echo "FAIL: cursor continuation missing"; exit 1; }
 
+# --- workflow apply: yaml compiles to a chained two-step run ---
+cat > "$dir/wf.yaml" << WF
+session: smoke-wf
+agent: claude
+repo: $dir
+steps:
+  - label: wf-1
+    on: { type: exec.succeeded, source: wf-build }
+    prompt: "Build done. Step one."
+  - label: wf-2
+    on: { type: continuation.completed, source: wf-1 }
+    prompt: "Step one done. Step two."
+WF
+"$rp" apply "$dir/wf.yaml"
+"$rp" exec --label wf-build -- true
+wfdone=""
+for _ in $(seq 1 50); do
+  if has wf-2 "$rp" events --type continuation.completed; then wfdone=1; break; fi
+  sleep 0.2
+done
+[ -n "$wfdone" ] || { echo "FAIL: workflow chain did not complete"; exit 1; }
+
+# a bad workflow must not leave partial rules behind
+rules_before=$(count '"id"' "$rp" rule list)
+cat > "$dir/bad.yaml" << WF
+session: smoke-wf
+agent: claude
+steps:
+  - on: { type: x }
+    prompt: "{{.Event.Bad"
+WF
+if "$rp" apply "$dir/bad.yaml" 2>/dev/null; then echo "FAIL: bad workflow must error"; exit 1; fi
+rules_after=$(count '"id"' "$rp" rule list)
+[ "$rules_before" -eq "$rules_after" ] || { echo "FAIL: bad apply leaked rules ($rules_before -> $rules_after)"; exit 1; }
+
 # --- MCP server: stdio handshake lists the five tools ---
 mcp_in="$dir/mcp_in.jsonl"
 cat > "$mcp_in" << 'JSONL'
