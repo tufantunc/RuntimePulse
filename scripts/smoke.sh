@@ -194,6 +194,9 @@ has runtimepulse cat "$fake_home/.cursor/mcp.json" || { echo "FAIL: setup did no
 # idempotent: second run skips
 PATH="$fake_home/bin:$PATH" HOME="$fake_home" "$rp" setup --agent cursor --all > "$dir/setup-2.txt"
 has "already registered" cat "$dir/setup-2.txt" || { echo "FAIL: re-run not reported as already registered"; exit 1; }
+# comma-separated --agent list: opencode isn't installed; dry-run still succeeds and lists cursor
+PATH="$fake_home/bin:$PATH" HOME="$fake_home" "$rp" setup --agent cursor,opencode --dry-run > "$dir/setup-list.txt"
+has cursor cat "$dir/setup-list.txt" || { echo "FAIL: setup --agent list dry-run did not mention cursor"; exit 1; }
 
 # --- MCP server: stdio handshake lists the five tools ---
 mcp_in="$dir/mcp_in.jsonl"
