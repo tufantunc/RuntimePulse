@@ -35,14 +35,19 @@ func TestGitWatchBranchChange(t *testing.T) {
 	time.Sleep(150 * time.Millisecond)
 
 	gitCmd(t, dir, "checkout", "-b", "feature/x")
-	evs := rec.waitLen(t, 1)
-	found := false
-	for _, e := range evs {
-		if e == "git.branch.changed" {
-			found = true
+	// checkout -b writes BOTH HEAD and refs; their fsnotify events arrive
+	// in nondeterministic order. Poll for the branch event specifically —
+	// waiting for "any first event" raced git.ref.changed on CI.
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		for _, e := range rec.snapshot() {
+			if e == "git.branch.changed" {
+				return
+			}
 		}
-	}
-	if !found {
-		t.Fatalf("branch switch must emit git.branch.changed, got %v", evs)
+		if time.Now().After(deadline) {
+			t.Fatalf("branch switch must emit git.branch.changed, got %v", rec.snapshot())
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 }
