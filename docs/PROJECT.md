@@ -263,6 +263,7 @@ runtimepulse wait http http://localhost:3000   # blocking client (scripts/CI)
 runtimepulse events --follow                   # stream events as JSON lines
 runtimepulse apply workflow.yaml               # compile workflow file to rules
 runtimepulse continue --session abc123 --agent claude --prompt "…"  # manual trigger
+runtimepulse setup                             # detect installed agent CLIs, register the MCP server
 ```
 
 Event output is JSON lines:

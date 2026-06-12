@@ -178,6 +178,23 @@ if "$rp" apply "$dir/bad.yaml" 2>/dev/null; then echo "FAIL: bad workflow must e
 rules_after=$(count '"id"' "$rp" rule list)
 [ "$rules_before" -eq "$rules_after" ] || { echo "FAIL: bad apply leaked rules ($rules_before -> $rules_after)"; exit 1; }
 
+# --- setup wizard: registers a (file-based) agent into an isolated HOME ---
+fake_home="$dir/home"
+mkdir -p "$fake_home/bin"
+# a stub `agent` binary so cursor is "installed"
+printf '#!/bin/sh\nexit 0\n' > "$fake_home/bin/agent"
+chmod +x "$fake_home/bin/agent"
+# dry-run lists cursor without writing
+PATH="$fake_home/bin:$PATH" HOME="$fake_home" "$rp" setup --agent cursor --dry-run > "$dir/setup-dry.txt"
+has cursor cat "$dir/setup-dry.txt" || { echo "FAIL: setup --dry-run did not detect cursor"; exit 1; }
+[ ! -f "$fake_home/.cursor/mcp.json" ] || { echo "FAIL: dry-run wrote a file"; exit 1; }
+# real register
+PATH="$fake_home/bin:$PATH" HOME="$fake_home" "$rp" setup --agent cursor --all
+has runtimepulse cat "$fake_home/.cursor/mcp.json" || { echo "FAIL: setup did not register cursor"; exit 1; }
+# idempotent: second run skips
+PATH="$fake_home/bin:$PATH" HOME="$fake_home" "$rp" setup --agent cursor --all > "$dir/setup-2.txt"
+has "already registered" cat "$dir/setup-2.txt" || { echo "FAIL: re-run not reported as already registered"; exit 1; }
+
 # --- MCP server: stdio handshake lists the five tools ---
 mcp_in="$dir/mcp_in.jsonl"
 cat > "$mcp_in" << 'JSONL'

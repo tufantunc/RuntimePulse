@@ -80,6 +80,8 @@ Auto-detects your platform, verifies checksums, installs to `~/.local/bin` (over
 
 **Manual download (all platforms, incl. Windows):** grab the archive for your OS/arch from the [releases page](https://github.com/tufantunc/RuntimePulse/releases) — Windows ships as a zip — and put `runtimepulse` on your PATH.
 
+Then register RuntimePulse with your installed agents: `runtimepulse setup` (detects Claude/Cursor/Codex/OpenCode and wires up the MCP server).
+
 **From source:** requires Go 1.26+ — `go build -o runtimepulse ./cmd/runtimepulse` (reports its version as `dev (<commit>)`).
 
 Verify a checkout: `go test -race ./... && ./scripts/smoke.sh` (hermetic; must end `SMOKE OK`).

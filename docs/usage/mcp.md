@@ -4,6 +4,16 @@ The MCP server is how an agent uses RuntimePulse **from inside its own session**
 
 The MCP server is a thin client: every tool calls the same daemon the CLI talks to (and auto-starts it if needed). It runs over stdio; one binary, no extra install.
 
+## Quick setup
+
+```bash
+runtimepulse setup
+```
+
+Detects which agent CLIs are installed (Claude Code, Cursor, Codex, OpenCode), shows a table, and registers RuntimePulse as a stdio MCP server for the ones you confirm. Flags: `--all` registers every installed agent without prompting, `--project` registers in the current project instead of user scope, `--dry-run` shows what would happen without writing anything, `--agent <name>` targets a single agent. Note: Codex only supports global registration — with `--project` it falls back to user scope and says so.
+
+The sections below are the manual per-agent reference if you prefer to register by hand.
+
 ## Registering with your agent
 
 **Claude Code:**
