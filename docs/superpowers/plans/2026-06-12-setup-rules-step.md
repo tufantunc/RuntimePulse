@@ -31,7 +31,8 @@ Then fetch the opencode rules/config docs (https://opencode.ai/docs/rules and ht
 
 Expected outcome: confirm `~/.config/opencode/AGENTS.md` is the global rules file opencode reads. If the docs instead require registering the file via the `instructions` array in `~/.config/opencode/opencode.json`, OR a different path, write the corrected path/mechanism here:
 
-> opencode global rules mechanism (fill in from verification): __________
+> opencode global rules mechanism (verified 2026-06-12, opencode 1.17.4 + opencode.ai/docs/rules):
+> **(A)** opencode auto-reads a bare global `~/.config/opencode/AGENTS.md` on startup (precedence: local AGENTS.md/CLAUDE.md up from cwd → global `~/.config/opencode/AGENTS.md` → `~/.claude/CLAUDE.md` fallback). The `instructions` array in opencode.json is a separate optional mechanism and is NOT required. The opencode rules writer is a **plain file append to `~/.config/opencode/AGENTS.md`** — no opencode.json change. Task 3's `ruleWriterFor` opencode case stands as written.
 
 Task 3's `ruleWriterFor` opencode case MUST use whatever this step confirms. If opencode needs an `instructions`-array registration rather than a bare global `AGENTS.md`, note it — that changes the opencode writer from a plain file append to a file-write **plus** a `mergeJSONServer`-style config entry. Default assumption if docs confirm it: plain `~/.config/opencode/AGENTS.md`.
 
