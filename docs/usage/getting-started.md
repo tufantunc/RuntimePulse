@@ -1,6 +1,10 @@
 # Getting Started
 
-## Build
+## Install
+
+Three channels are available — Homebrew, the install script, and manual download. See the [README](../../README.md#install) for all options.
+
+**From source** (contributors and Go developers):
 
 Requires Go 1.26+.
 

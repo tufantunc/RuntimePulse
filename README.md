@@ -58,16 +58,29 @@ claude mcp add --transport stdio runtimepulse -- runtimepulse mcp
 
 …after which the agent can call `create_watch` / `create_rule` ("wake me when X") and end its turn.
 
-## Install & build
+## Install
 
-Requires Go 1.26+. Runs on macOS, Linux, and Windows 10 1803+ (AF_UNIX requirement).
+Runs on macOS, Linux, and Windows 10 1803+.
+
+**Homebrew (macOS/Linux):**
 
 ```bash
-go build -o runtimepulse ./cmd/runtimepulse
-# put it on PATH; the daemon auto-starts on first use
+brew install --cask tufantunc/tap/runtimepulse
 ```
 
-Verify everything: `go test -race ./... && ./scripts/smoke.sh` (the smoke is hermetic — it mocks the agent CLIs and must end `SMOKE OK`).
+**Install script (macOS/Linux):**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/tufantunc/RuntimePulse/main/scripts/install.sh | sh
+```
+
+Auto-detects your platform, verifies checksums, installs to `~/.local/bin` (override with `INSTALL_DIR=`, pin with `VERSION=vX.Y.Z`).
+
+**Manual download (all platforms, incl. Windows):** grab the archive for your OS/arch from the [releases page](https://github.com/tufantunc/RuntimePulse/releases) — Windows ships as a zip — and put `runtimepulse` on your PATH.
+
+**From source:** requires Go 1.26+ — `go build -o runtimepulse ./cmd/runtimepulse` (reports its version as `dev (<commit>)`).
+
+Verify a checkout: `go test -race ./... && ./scripts/smoke.sh` (hermetic; must end `SMOKE OK`).
 
 ## Documentation
 
