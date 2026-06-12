@@ -97,9 +97,9 @@ func setupCmd() *cobra.Command {
 				case r.Skipped:
 					fmt.Printf("  %-10s • already registered\n", r.Agent)
 				default:
-					line := r.Agent + "  ✓ registered"
+					line := fmt.Sprintf("%-10s ✓ registered (%s scope)", r.Agent, scope.String())
 					if r.Note != "" {
-						line += " (" + r.Note + ")"
+						line = fmt.Sprintf("%-10s ✓ registered (%s)", r.Agent, r.Note)
 					}
 					fmt.Printf("  %s\n", line)
 				}
