@@ -36,7 +36,7 @@ func TestContinuationRunRPC(t *testing.T) {
 	_, c := startTestDaemon(t)
 
 	if err := c.Call("session.register",
-		map[string]any{"sessionId": "abc", "agent": "claude", "repoPath": "/tmp"}, nil); err != nil {
+		map[string]any{"sessionId": "abc", "agent": "claude", "repoPath": t.TempDir()}, nil); err != nil {
 		t.Fatal(err)
 	}
 	var cont map[string]any
@@ -81,7 +81,7 @@ func TestCursorSessionDispatchesViaMock(t *testing.T) {
 	_, c := startTestDaemon(t)
 
 	if err := c.Call("session.register",
-		map[string]any{"sessionId": "cur-1", "agent": "cursor", "repoPath": "/tmp"}, nil); err != nil {
+		map[string]any{"sessionId": "cur-1", "agent": "cursor", "repoPath": t.TempDir()}, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.Call("continuation.run",

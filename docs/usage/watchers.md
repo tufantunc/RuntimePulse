@@ -51,7 +51,7 @@ fsnotify-based (no polling). Events: `file.created`, `file.changed`, `file.remov
 runtimepulse watch add process --pattern "vite"
 ```
 
-Running = `pgrep -f <pattern>` finds a match. Events: `process.started` / `process.exited`.
+Running = some process's full command line contains the pattern as a case-sensitive substring (identical semantics on every platform — no `pgrep` dependency). Events: `process.started` / `process.exited`.
 
 ### docker — `--container`
 

@@ -19,10 +19,16 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
-// Short tempdir: macOS unix socket paths are limited to ~104 bytes.
+// shortTempDir returns a temp dir whose path is short enough for unix
+// socket limits (~104 bytes on macOS). On Windows the default temp dir
+// is fine; on unix t.TempDir can exceed the limit, so use /tmp.
 func shortTempDir(t *testing.T) string {
 	t.Helper()
-	dir, err := os.MkdirTemp("/tmp", "rp")
+	root := "/tmp"
+	if runtime.GOOS == "windows" {
+		root = "" // os default (%TEMP%)
+	}
+	dir, err := os.MkdirTemp(root, "rp")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -62,7 +68,7 @@ func TestRuleSessionInjectFlow(t *testing.T) {
 
 	var sess map[string]any
 	err := c.Call("session.register",
-		map[string]any{"sessionId": "abc123", "agent": "claude", "repoPath": "/tmp/x"}, &sess)
+		map[string]any{"sessionId": "abc123", "agent": "claude", "repoPath": t.TempDir()}, &sess)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +118,7 @@ func TestRuleAddInvalidTemplateHasNoSideEffects(t *testing.T) {
 	_, c := startTestDaemon(t)
 	err := c.Call("rule.add", map[string]any{
 		"type": "docker.healthy", "sessionId": "side-effect-test",
-		"agent": "claude", "repoPath": "/tmp/x",
+		"agent": "claude", "repoPath": t.TempDir(),
 		"prompt": "{{.Event.Source", // syntax error
 	}, &map[string]any{})
 	if err == nil {

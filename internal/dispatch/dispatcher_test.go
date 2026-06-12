@@ -41,7 +41,7 @@ func newFixture(t *testing.T) *fixture {
 
 func (f *fixture) registerSession(t *testing.T, id string) {
 	t.Helper()
-	if _, err := f.store.RegisterSession(core.Session{SessionID: id, Agent: "fake", RepoPath: "/tmp"}); err != nil {
+	if _, err := f.store.RegisterSession(core.Session{SessionID: id, Agent: "fake", RepoPath: t.TempDir()}); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -157,7 +157,7 @@ func TestDispatchFIFOWithinSession(t *testing.T) {
 
 func TestDispatchUnknownAgentFails(t *testing.T) {
 	f := newFixture(t)
-	if _, err := f.store.RegisterSession(core.Session{SessionID: "sess-x", Agent: "cursor", RepoPath: "/tmp"}); err != nil {
+	if _, err := f.store.RegisterSession(core.Session{SessionID: "sess-x", Agent: "cursor", RepoPath: t.TempDir()}); err != nil {
 		t.Fatal(err)
 	}
 	f.addRule(t, "tcp.available", "sess-x", "")
@@ -181,7 +181,7 @@ func TestShutdownLeavesInFlightRunning(t *testing.T) {
 	d := New(st, adapter.Registry{"fake": fake}, eng.Ingest)
 	eng.Notify = d.Wake
 
-	if _, err := st.RegisterSession(core.Session{SessionID: "sess-1", Agent: "fake", RepoPath: "/tmp"}); err != nil {
+	if _, err := st.RegisterSession(core.Session{SessionID: "sess-1", Agent: "fake", RepoPath: t.TempDir()}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := st.AddRule(core.Rule{
@@ -228,7 +228,7 @@ func TestBootRecovery(t *testing.T) {
 	defer st.Close()
 	b := bus.New()
 	eng := engine.New(st, b)
-	if _, err := st.RegisterSession(core.Session{SessionID: "sess-1", Agent: "fake", RepoPath: "/tmp"}); err != nil {
+	if _, err := st.RegisterSession(core.Session{SessionID: "sess-1", Agent: "fake", RepoPath: t.TempDir()}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := st.AddRule(core.Rule{

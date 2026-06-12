@@ -326,6 +326,7 @@ Local, single-user developer machine by assumption (documented, not accidental):
 * The opt-in WebSocket event stream (`--ws-port`) binds to `127.0.0.1` only and requires a token (stored in `~/.runtimepulse/ws-token`, mode 0600).
 * Prompt templates are authored by the rule creator; template context exposes only machine-generated event fields. RuntimePulse never forwards arbitrary external text into an agent prompt.
 * Continuations execute agent CLIs as the daemon's own user; RuntimePulse adds no privilege boundary.
+* On Windows, the socket file does not carry a 0600 mode (POSIX permissions do not apply); access control relies on the user-private ACLs inherited by `%USERPROFILE%\.runtimepulse\`, which are accessible only to the owning user by default.
 
 ## 10. Technology Stack
 
@@ -336,6 +337,7 @@ Local, single-user developer machine by assumption (documented, not accidental):
 | Storage | SQLite via `modernc.org/sqlite` (CGO-free, easy cross-compile) |
 | File/git watching | fsnotify |
 | Docker watching | `docker events` / `docker inspect` CLI subprocesses (push-based, no SDK) |
+| Process watching | gopsutil/v4 (command-line substring match; identical semantics on every platform) |
 | HTTP/TCP watching | `net/http` / `net.Dial` probes (internal polling with stability threshold) |
 | Prompt templates | Go `text/template` |
 | IPC | unix socket, JSON-RPC |

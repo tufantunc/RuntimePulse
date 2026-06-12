@@ -3,6 +3,7 @@ package mcpserver
 import (
 	"context"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -11,10 +12,15 @@ import (
 )
 
 // newTestDaemonClient starts a daemon in a short tmp dir and returns a
-// connected client. macOS unix socket paths are ~104 bytes, so use /tmp.
+// connected client. macOS unix socket paths are ~104 bytes, so use /tmp
+// on unix; on Windows the default temp dir is used.
 func newTestDaemonClient(t *testing.T) *client.Client {
 	t.Helper()
-	dir, err := os.MkdirTemp("/tmp", "rpmcp")
+	root := "/tmp"
+	if runtime.GOOS == "windows" {
+		root = "" // os default (%TEMP%)
+	}
+	dir, err := os.MkdirTemp(root, "rpmcp")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +71,7 @@ func TestGetEventsTool(t *testing.T) {
 func TestCancelRuleTool(t *testing.T) {
 	c := newTestDaemonClient(t)
 	if err := c.Call("session.register",
-		map[string]any{"sessionId": "s1", "agent": "claude", "repoPath": "/tmp"}, nil); err != nil {
+		map[string]any{"sessionId": "s1", "agent": "claude", "repoPath": t.TempDir()}, nil); err != nil {
 		t.Fatal(err)
 	}
 	var rule map[string]any
@@ -93,7 +99,7 @@ func TestCreateRuleSelfRegisters(t *testing.T) {
 	h := createRuleHandler(c)
 	_, out, err := h(context.Background(), nil, CreateRuleInput{
 		EventType: "docker.healthy", Source: "postgres",
-		SessionID: "abc123", Agent: "claude", RepoPath: "/tmp/x",
+		SessionID: "abc123", Agent: "claude", RepoPath: t.TempDir(),
 		Prompt: "{{.Event.Source}} healthy. Continue.", Label: "step-1", OneShot: true,
 	})
 	if err != nil {
@@ -116,7 +122,7 @@ func TestCreateRuleBadTemplateIsToolError(t *testing.T) {
 	c := newTestDaemonClient(t)
 	h := createRuleHandler(c)
 	_, _, err := h(context.Background(), nil, CreateRuleInput{
-		EventType: "docker.healthy", SessionID: "abc123", Agent: "claude", RepoPath: "/tmp/x",
+		EventType: "docker.healthy", SessionID: "abc123", Agent: "claude", RepoPath: t.TempDir(),
 		Prompt: "{{.Event.Bad", // syntax error
 	})
 	if err == nil {

@@ -11,7 +11,7 @@ import (
 
 func TestFakeRecordsCallsAndControlsOutcome(t *testing.T) {
 	f := NewFake()
-	sess := core.Session{SessionID: "s1", Agent: "fake", RepoPath: "/tmp"}
+	sess := core.Session{SessionID: "s1", Agent: "fake", RepoPath: t.TempDir()}
 
 	res, err := f.Resume(context.Background(), sess, "do it")
 	if err != nil || res.ExitCode != 0 {

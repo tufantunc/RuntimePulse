@@ -28,9 +28,11 @@ runtimepulse daemon --ws-port 8787   # additionally serve the WebSocket event st
 
 Only one daemon runs per state directory (enforced by a lock file). Graceful shutdown leaves in-flight agent resumes marked `running`; the next daemon start re-queues them — at-least-once delivery, never a lost wake-up.
 
+**Windows notes:** On Windows, a crashed daemon's lock file can be released with a small OS delay — an immediate restart may transiently report "already running"; retrying resolves it. The auto-started daemon is detached with no console window and never receives Ctrl-C; shutdown is effectively a process kill followed by boot recovery (in-flight resumes re-queue on the next start).
+
 ## State directory
 
-Everything lives in `~/.runtimepulse/`:
+Everything lives in `~/.runtimepulse/` (macOS/Linux) or `%USERPROFILE%\.runtimepulse\` (Windows):
 
 | File | Purpose |
 |---|---|
@@ -39,6 +41,8 @@ Everything lives in `~/.runtimepulse/`:
 | `daemon.log` | log of the auto-started daemon |
 | `daemon.lock` | single-instance lock |
 | `ws-token` | WebSocket auth token (only created when `--ws-port` is used) |
+
+On Windows the socket file does not carry a 0600 mode (the POSIX permission model does not apply). Access control relies instead on the user-private ACLs inherited from `%USERPROFILE%` — only the owning user can reach the socket.
 
 Override the location with `RUNTIMEPULSE_DIR=/path` — handy for isolated experiments:
 

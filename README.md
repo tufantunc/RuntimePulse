@@ -60,7 +60,7 @@ claude mcp add --transport stdio runtimepulse -- runtimepulse mcp
 
 ## Install & build
 
-Requires Go 1.26+.
+Requires Go 1.26+. Runs on macOS, Linux, and Windows 10 1803+ (AF_UNIX requirement).
 
 ```bash
 go build -o runtimepulse ./cmd/runtimepulse
