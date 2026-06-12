@@ -1,0 +1,59 @@
+version: 2
+project_name: runtimepulse
+
+builds:
+  - id: runtimepulse
+    main: ./cmd/runtimepulse
+    env:
+      - CGO_ENABLED=0
+    goos: [darwin, linux, windows]
+    goarch: [amd64, arm64]
+    ldflags:
+      - -s -w -X github.com/tufantunc/RuntimePulse/internal/version.Version={{ .Version }}
+
+archives:
+  - id: default
+    # Deterministic names: install.sh builds latest/download URLs from
+    # these without touching the GitHub API.
+    name_template: "runtimepulse_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: SHA256SUMS
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs"
+      - "^test"
+      - "^plan"
+      - "^build"
+
+# `brews` is deprecated as of GoReleaser v2.10 (removed in newer v2 minors);
+# `homebrew_casks` is the documented replacement. Same tap/owner/token
+# semantics; casks have no `test` stanza, and unsigned binaries need the
+# quarantine-removal hook below (per the deprecation notice).
+homebrew_casks:
+  - name: runtimepulse
+    repository:
+      owner: tufantunc
+      name: homebrew-tap
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    homepage: https://github.com/tufantunc/RuntimePulse
+    description: "Event-driven session continuation engine for AI coding agents"
+    license: "Apache-2.0"
+    binaries:
+      - runtimepulse
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/runtimepulse"]
+          end
