@@ -10,7 +10,7 @@ The MCP server is a thin client: every tool calls the same daemon the CLI talks 
 runtimepulse setup
 ```
 
-Detects which agent CLIs are installed (Claude Code, Cursor, Codex, OpenCode), shows a table, and registers RuntimePulse as a stdio MCP server for the ones you confirm. When run interactively, a numbered picker lets you choose agents by number or name (comma-separated; empty input selects all, `q` quits). Flags: `--all` registers every installed agent without prompting, `--project` registers in the current project instead of user scope, `--dry-run` shows what would happen without writing anything, `--agent <names>` targets specific agents, comma-separated (e.g. `--agent claude,opencode`). Note: Codex only supports global registration — with `--project` it falls back to user scope and says so.
+Detects which agent CLIs are installed (Claude Code, Cursor, Codex, OpenCode), shows a table, and registers RuntimePulse as a stdio MCP server for the ones you select (--agent skips the prompt — the flag itself is the selection). When run interactively, a numbered picker lets you choose agents by number or name (comma-separated; empty input selects all, `q` quits). Flags: `--all` registers every installed agent without prompting, `--project` registers in the current project instead of user scope, `--dry-run` shows what would happen without writing anything, `--agent <names>` targets specific agents, comma-separated (e.g. `--agent claude,opencode`). Note: Codex only supports global registration — with `--project` it falls back to user scope and says so.
 
 The sections below are the manual per-agent reference if you prefer to register by hand.
 

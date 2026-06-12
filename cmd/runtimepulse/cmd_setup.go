@@ -137,7 +137,10 @@ func parseAgentFlag(value string, valid []string) ([]string, error) {
 	var out []string
 	for _, tok := range strings.Split(value, ",") {
 		tok = strings.TrimSpace(tok)
-		if tok == "" || !contains(valid, tok) {
+		if tok == "" {
+			return nil, fmt.Errorf("empty agent name in %q", value)
+		}
+		if !contains(valid, tok) {
 			return nil, fmt.Errorf("unknown agent %q (valid: %s)", tok, strings.Join(valid, "|"))
 		}
 		if !contains(out, tok) {
@@ -197,7 +200,11 @@ func selectAgents(candidates []string) ([]string, error) {
 	var lastErr error
 	for attempt := 0; attempt < 2; attempt++ {
 		fmt.Print("Selection (e.g. 1,3 — empty = all, q = quit): ")
-		line, _ := reader.ReadString('\n')
+		line, readErr := reader.ReadString('\n')
+		if readErr != nil && strings.TrimSpace(line) == "" {
+			// Ctrl-D / closed stdin is an abort, never "select all".
+			return nil, nil
+		}
 		chosen, err := parseSelection(line, candidates)
 		if err != nil {
 			lastErr = err
