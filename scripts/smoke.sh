@@ -82,14 +82,24 @@ sleep 0.5
 "$rp" rule add --on continuation.completed:chain-1 --session smoke-3 \
   --prompt 'Step one done. Do step two.' --one-shot --label chain-2
 "$rp" inject --type tcp.available --source smoke-tcp
-sleep 1.5
-completed=$("$rp" continuations --state completed | grep -c smoke-3)
-[ "$completed" -eq 2 ] || { echo "FAIL: chain expected 2 completed continuations for smoke-3, got $completed"; exit 1; }
+# Poll for the chain-2 completion EVENT, not the continuation count:
+# a continuation is marked completed slightly before its
+# continuation.completed event is emitted, so the event is the true
+# end-of-chain signal. Its presence implies both hops ran.
+for _ in $(seq 1 50); do
+  "$rp" events --type continuation.completed | grep -q chain-2 && break
+  sleep 0.2
+done
 "$rp" events --type continuation.completed | grep -q chain-2 || { echo "FAIL: chain-2 completion event missing"; exit 1; }
+completed=$("$rp" continuations --state completed | grep -c smoke-3 || true)
+[ "$completed" -eq 2 ] || { echo "FAIL: chain expected 2 completed continuations for smoke-3, got $completed"; exit 1; }
 
 # --- manual continue ---
 "$rp" continue --session smoke-3 --prompt "manual poke"
-sleep 0.8
+for _ in $(seq 1 25); do
+  "$rp" continuations --state completed | grep -q '"label":"manual"' && break
+  sleep 0.2
+done
 "$rp" continuations --state completed | grep -q '"label":"manual"' || { echo "FAIL: manual continuation missing"; exit 1; }
 
 # --- MCP server: stdio handshake lists the five tools ---
