@@ -111,11 +111,16 @@ func TestProcessProber(t *testing.T) {
 }
 
 func TestProcessProberExcludesSelf(t *testing.T) {
-	// our own test-binary path is in our own cmdline; the prober must
-	// not report US as a match for it
-	self, _ := os.Executable()
-	p := ProcessProber(self + " unique-never-spawned-suffix")
-	if p(context.Background()) {
-		t.Fatal("prober must not match a pattern only present in nonexistent processes")
+	// Our own executable path IS a substring of our own cmdline, and no
+	// other live process carries this per-package binary path (the
+	// marker child from TestProcessProber is killed and reaped). With
+	// self-exclusion working, the prober must report no match; if the
+	// exclusion were removed, this test would fail.
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ProcessProber(self)(context.Background()) {
+		t.Fatal("prober must exclude its own process")
 	}
 }
