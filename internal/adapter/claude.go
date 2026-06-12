@@ -2,18 +2,11 @@ package adapter
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
 	"os"
 	"os/exec"
-	"strings"
-	"time"
-	"unicode/utf8"
 
 	"github.com/tufantunc/RuntimePulse/internal/core"
 )
-
-const summaryLimit = 500
 
 // Claude resumes Claude Code sessions headlessly:
 //
@@ -50,57 +43,7 @@ func BuildClaudeArgs(sessionID, prompt string) []string {
 	return []string{"--resume", sessionID, "--output-format", "json", "-p", "--", prompt}
 }
 
-// ParseClaudeOutput extracts the result text from --output-format json,
-// falling back to the raw output. The boolean reports whether
-// structured output was recognized.
-func ParseClaudeOutput(out []byte) (string, bool) {
-	var r struct {
-		Result string `json:"result"`
-	}
-	if err := json.Unmarshal(out, &r); err == nil && r.Result != "" {
-		return truncate(r.Result), true
-	}
-	return truncate(strings.TrimSpace(string(out))), false
-}
-
-func truncate(s string) string {
-	if len(s) <= summaryLimit {
-		return s
-	}
-	cut := summaryLimit
-	for cut > 0 && !utf8.RuneStart(s[cut]) {
-		cut--
-	}
-	return s[:cut]
-}
-
 func (c Claude) Resume(ctx context.Context, sess core.Session, prompt string) (Result, error) {
-	bin := claudeBin()
-	args := BuildClaudeArgs(sess.SessionID, prompt)
-	cmd := exec.CommandContext(ctx, bin, args...)
-	cmd.Dir = sess.RepoPath
-
-	start := time.Now()
-	out, err := cmd.CombinedOutput()
-	res := Result{
-		Command:    bin + " " + strings.Join(args, " "),
-		DurationMs: time.Since(start).Milliseconds(),
-	}
-	summary, _ := ParseClaudeOutput(out)
-	res.OutputSummary = summary
-
-	if err != nil {
-		if ctx.Err() != nil {
-			res.ExitCode = -1
-			res.OutputSummary = "resume timed out or cancelled: " + res.OutputSummary
-			return res, nil // the run WAS attempted; timeout is a Result
-		}
-		var ee *exec.ExitError
-		if errors.As(err, &ee) {
-			res.ExitCode = ee.ExitCode() // agent ran and failed: a Result, not an error
-			return res, nil
-		}
-		return res, err // could not even run (binary missing, spawn failure)
-	}
-	return res, nil
+	return runCLI(ctx, claudeBin(), BuildClaudeArgs(sess.SessionID, prompt), sess.RepoPath,
+		func(out []byte) string { s, _ := ParseResultJSON(out); return s })
 }

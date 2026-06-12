@@ -24,17 +24,17 @@ func TestBuildClaudeArgs(t *testing.T) {
 	}
 }
 
-func TestParseClaudeOutput(t *testing.T) {
-	sum, structured := ParseClaudeOutput([]byte(`{"result":"Migrations applied.","session_id":"abc","total_cost_usd":0.01}`))
+func TestParseResultJSONClaudeShape(t *testing.T) {
+	sum, structured := ParseResultJSON([]byte(`{"result":"Migrations applied.","session_id":"abc","total_cost_usd":0.01}`))
 	if !structured || sum != "Migrations applied." {
 		t.Fatalf("json parse failed: %q %v", sum, structured)
 	}
-	sum, structured = ParseClaudeOutput([]byte("plain text error output"))
+	sum, structured = ParseResultJSON([]byte("plain text error output"))
 	if structured || sum != "plain text error output" {
 		t.Fatalf("fallback failed: %q %v", sum, structured)
 	}
 	long := strings.Repeat("x", 2000)
-	sum, _ = ParseClaudeOutput([]byte(long))
+	sum, _ = ParseResultJSON([]byte(long))
 	if len(sum) != summaryLimit {
 		t.Fatalf("summary not truncated: %d", len(sum))
 	}
