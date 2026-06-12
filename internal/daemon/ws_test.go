@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -32,9 +33,13 @@ func TestServeWSTokenFileAndAuth(t *testing.T) {
 	if len(token) < 16 {
 		t.Fatalf("token too short: %q", token)
 	}
-	info, _ := os.Stat(filepath.Join(dir, "ws-token"))
-	if perm := info.Mode().Perm(); perm != 0o600 {
-		t.Fatalf("token file perm = %o, want 0600", perm)
+	// Unix-only: file modes are not meaningful on Windows (ACL model);
+	// access control there relies on the user-private profile directory.
+	if runtime.GOOS != "windows" {
+		info, _ := os.Stat(filepath.Join(dir, "ws-token"))
+		if perm := info.Mode().Perm(); perm != 0o600 {
+			t.Fatalf("token file perm = %o, want 0600", perm)
+		}
 	}
 
 	resp, err := http.Get("http://" + addr + "/events")
