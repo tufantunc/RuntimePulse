@@ -14,6 +14,11 @@ import (
 // rule.add self-registers the session (agent+repoPath). On a partial
 // failure the already-created rules are removed best-effort, so a bad
 // step never leaves half a workflow armed.
+//
+// Note: today the rollback path is unreachable with a Parse-valid
+// workflow — the daemon re-validates the same things Parse checked.
+// It is kept as defense for future server-side validations (e.g.
+// agent-name checks); it has no integration test for that reason.
 func applyCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "apply <workflow.yaml>",

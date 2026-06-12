@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -33,11 +34,17 @@ type Daemon struct {
 	Watches  *watch.Manager
 	Dispatch *dispatch.Dispatcher
 
-	store        *store.Store
-	bus          *bus.Bus
-	ln           net.Listener
-	lock         *os.File
-	dispatchDone chan struct{}
+	store *store.Store
+	bus   *bus.Bus
+	ln    net.Listener
+	lock  *os.File
+	// dispatchDone is allocated in New (immutable thereafter — no race
+	// with Close) and closed by Serve's dispatch goroutine. Close waits
+	// on it ONLY if that goroutine was actually launched: a Daemon that
+	// was New()ed but never Serve()d (early CLI errors, tests) must not
+	// stall 10s on a channel nobody will close.
+	dispatchDone    chan struct{}
+	dispatchStarted atomic.Bool
 }
 
 // acquireLock takes an exclusive, non-blocking flock on dir/daemon.lock
@@ -129,6 +136,7 @@ func (d *Daemon) Serve(ctx context.Context) error {
 		return err
 	}
 	d.Watches.Run(ctx, persisted)
+	d.dispatchStarted.Store(true)
 	go func() {
 		d.Dispatch.Run(ctx)
 		close(d.dispatchDone)
@@ -146,9 +154,11 @@ func (d *Daemon) Serve(ctx context.Context) error {
 }
 
 func (d *Daemon) Close() {
-	select {
-	case <-d.dispatchDone:
-	case <-time.After(10 * time.Second): // agent kill should be near-instant; don't hang forever
+	if d.dispatchStarted.Load() {
+		select {
+		case <-d.dispatchDone:
+		case <-time.After(10 * time.Second): // agent kill should be near-instant; don't hang forever
+		}
 	}
 	d.ln.Close()
 	d.store.Close()

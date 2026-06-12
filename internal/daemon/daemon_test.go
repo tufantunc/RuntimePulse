@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/tufantunc/RuntimePulse/internal/client"
 )
@@ -126,5 +127,18 @@ func TestSocketPermissions(t *testing.T) {
 	}
 	if perm := info.Mode().Perm(); perm != 0o600 {
 		t.Fatalf("socket perm = %o, want 0600", perm)
+	}
+}
+
+func TestCloseWithoutServeReturnsPromptly(t *testing.T) {
+	dir := shortTempDir(t)
+	d, err := New(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := time.Now()
+	d.Close() // Serve never ran: must not stall on dispatchDone
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("Close without Serve stalled %v", elapsed)
 	}
 }
