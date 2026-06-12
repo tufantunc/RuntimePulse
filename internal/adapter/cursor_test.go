@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/tufantunc/RuntimePulse/internal/core"
+	"github.com/tufantunc/RuntimePulse/internal/mockexe"
 )
 
 func TestBuildCursorArgs(t *testing.T) {
@@ -24,7 +25,7 @@ func TestBuildCursorArgs(t *testing.T) {
 func TestCursorResumeWithMockBinary(t *testing.T) {
 	// echo the LAST argument back as the result — proves the dash-safe
 	// prompt position in one test.
-	bin := mockBin(t, "#!/bin/sh\nfor last; do :; done\nprintf '{\"type\":\"result\",\"result\":\"%s\"}' \"$last\"\n")
+	bin := mockBin(t, mockexe.Spec{Stdout: `{"type":"result","result":"{LAST}"}`})
 	t.Setenv("RUNTIMEPULSE_CURSOR_BIN", bin)
 
 	c := Cursor{}

@@ -2,24 +2,37 @@ package daemon
 
 import (
 	"os"
-	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+
+	"github.com/tufantunc/RuntimePulse/internal/mockexe"
 )
 
-// mockClaude installs a fake claude binary for the test daemon.
-func mockClaude(t *testing.T, script string) {
+// mockAgent configures this test binary as the mocked agent CLI
+// (re-exec pattern; see internal/mockexe) and points binEnv at it.
+// Spec env vars are set with t.Setenv so spawned children inherit them.
+func mockAgent(t *testing.T, binEnv string, spec mockexe.Spec) {
 	t.Helper()
-	dir := shortTempDir(t)
-	mock := filepath.Join(dir, "mock-claude")
-	if err := os.WriteFile(mock, []byte(script), 0o755); err != nil {
+	for _, kv := range mockexe.Env(spec) {
+		k, v, _ := strings.Cut(kv, "=")
+		t.Setenv(k, v)
+	}
+	exe, err := os.Executable()
+	if err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("RUNTIMEPULSE_CLAUDE_BIN", mock)
+	t.Setenv(binEnv, exe)
+}
+
+// mockClaude installs a fake claude binary for the test daemon.
+func mockClaude(t *testing.T, spec mockexe.Spec) {
+	t.Helper()
+	mockAgent(t, "RUNTIMEPULSE_CLAUDE_BIN", spec)
 }
 
 func TestContinuationRunRPC(t *testing.T) {
-	mockClaude(t, "#!/bin/sh\necho '{\"result\":\"manual run ok\"}'\n")
+	mockClaude(t, mockexe.Spec{Stdout: `{"result":"manual run ok"}`})
 	_, c := startTestDaemon(t)
 
 	if err := c.Call("session.register",
@@ -63,13 +76,8 @@ func TestContinuationRunUnknownSession(t *testing.T) {
 }
 
 func TestCursorSessionDispatchesViaMock(t *testing.T) {
-	dir := shortTempDir(t)
-	mock := filepath.Join(dir, "mock-agent")
-	if err := os.WriteFile(mock,
-		[]byte("#!/bin/sh\nprintf '{\"type\":\"result\",\"result\":\"cursor turn done\"}'\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("RUNTIMEPULSE_CURSOR_BIN", mock)
+	mockAgent(t, "RUNTIMEPULSE_CURSOR_BIN",
+		mockexe.Spec{Stdout: `{"type":"result","result":"cursor turn done"}`})
 	_, c := startTestDaemon(t)
 
 	if err := c.Call("session.register",

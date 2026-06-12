@@ -2,13 +2,12 @@ package adapter
 
 import (
 	"context"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/tufantunc/RuntimePulse/internal/core"
+	"github.com/tufantunc/RuntimePulse/internal/mockexe"
 )
 
 func TestBuildClaudeArgs(t *testing.T) {
@@ -43,12 +42,7 @@ func TestParseResultJSONClaudeShape(t *testing.T) {
 // TestClaudeResumeWithMockBinary exercises the real subprocess path
 // hermetically via RUNTIMEPULSE_CLAUDE_BIN.
 func TestClaudeResumeWithMockBinary(t *testing.T) {
-	dir := t.TempDir()
-	mock := filepath.Join(dir, "mock-claude")
-	script := "#!/bin/sh\necho '{\"result\":\"ok from mock\"}'\n"
-	if err := os.WriteFile(mock, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	mock := mockBin(t, mockexe.Spec{Stdout: `{"result":"ok from mock"}`})
 	t.Setenv("RUNTIMEPULSE_CLAUDE_BIN", mock)
 
 	c := Claude{}
@@ -56,7 +50,7 @@ func TestClaudeResumeWithMockBinary(t *testing.T) {
 		t.Fatalf("validate with mock bin: %v", err)
 	}
 	res, err := c.Resume(context.Background(),
-		core.Session{SessionID: "abc", RepoPath: dir}, "go on")
+		core.Session{SessionID: "abc", RepoPath: t.TempDir()}, "go on")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -69,14 +63,10 @@ func TestClaudeResumeWithMockBinary(t *testing.T) {
 }
 
 func TestClaudeResumeNonzeroExit(t *testing.T) {
-	dir := t.TempDir()
-	mock := filepath.Join(dir, "mock-claude")
-	if err := os.WriteFile(mock, []byte("#!/bin/sh\necho 'denied' >&2\nexit 1\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	mock := mockBin(t, mockexe.Spec{Stderr: "denied", Exit: 1})
 	t.Setenv("RUNTIMEPULSE_CLAUDE_BIN", mock)
 	res, err := Claude{}.Resume(context.Background(),
-		core.Session{SessionID: "abc", RepoPath: dir}, "go")
+		core.Session{SessionID: "abc", RepoPath: t.TempDir()}, "go")
 	if err != nil {
 		t.Fatalf("nonzero exit is a Result, not an error: %v", err)
 	}
@@ -86,16 +76,12 @@ func TestClaudeResumeNonzeroExit(t *testing.T) {
 }
 
 func TestClaudeResumeDashPromptArrivesIntact(t *testing.T) {
-	dir := t.TempDir()
-	mock := filepath.Join(dir, "mock-claude")
-	// echo the LAST argument back as the result
-	script := "#!/bin/sh\nfor last; do :; done\nprintf '{\"result\":\"%s\"}' \"$last\"\n"
-	if err := os.WriteFile(mock, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	// echo the LAST argument (the prompt, after the `--` terminator)
+	// back as the result
+	mock := mockBin(t, mockexe.Spec{Stdout: `{"result":"{LAST}"}`})
 	t.Setenv("RUNTIMEPULSE_CLAUDE_BIN", mock)
 	res, err := Claude{}.Resume(context.Background(),
-		core.Session{SessionID: "abc", RepoPath: dir}, "- Postgres is ready. Continue.")
+		core.Session{SessionID: "abc", RepoPath: t.TempDir()}, "- Postgres is ready. Continue.")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -105,15 +91,11 @@ func TestClaudeResumeDashPromptArrivesIntact(t *testing.T) {
 }
 
 func TestClaudeResumeTimeoutAnnotated(t *testing.T) {
-	dir := t.TempDir()
-	mock := filepath.Join(dir, "mock-claude")
-	if err := os.WriteFile(mock, []byte("#!/bin/sh\nsleep 5\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	mock := mockBin(t, mockexe.Spec{DelayMs: 5000})
 	t.Setenv("RUNTIMEPULSE_CLAUDE_BIN", mock)
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
 	defer cancel()
-	res, err := Claude{}.Resume(ctx, core.Session{SessionID: "abc", RepoPath: dir}, "go")
+	res, err := Claude{}.Resume(ctx, core.Session{SessionID: "abc", RepoPath: t.TempDir()}, "go")
 	if err != nil {
 		t.Fatalf("timeout is a Result, not an error: %v", err)
 	}

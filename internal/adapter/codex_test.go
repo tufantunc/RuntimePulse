@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/tufantunc/RuntimePulse/internal/core"
+	"github.com/tufantunc/RuntimePulse/internal/mockexe"
 )
 
 func TestBuildCodexArgs(t *testing.T) {
@@ -23,7 +24,7 @@ func TestBuildCodexArgs(t *testing.T) {
 
 func TestCodexResumeSeparatesProgressFromResult(t *testing.T) {
 	// codex semantics: progress → stderr, final message → stdout
-	bin := mockBin(t, "#!/bin/sh\necho 'thinking...' >&2\nfor last; do :; done\necho \"did: $last\"\n")
+	bin := mockBin(t, mockexe.Spec{Stderr: "thinking...", Stdout: "did: {LAST}"})
 	t.Setenv("RUNTIMEPULSE_CODEX_BIN", bin)
 
 	c := Codex{}

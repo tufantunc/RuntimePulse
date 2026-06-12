@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/tufantunc/RuntimePulse/internal/core"
+	"github.com/tufantunc/RuntimePulse/internal/mockexe"
 )
 
 func TestBuildOpenCodeArgs(t *testing.T) {
@@ -21,7 +22,7 @@ func TestBuildOpenCodeArgs(t *testing.T) {
 }
 
 func TestOpenCodeResumeWithMockBinary(t *testing.T) {
-	bin := mockBin(t, "#!/bin/sh\nfor last; do :; done\necho \"oc: $last\"\n")
+	bin := mockBin(t, mockexe.Spec{Stdout: "oc: {LAST}"})
 	t.Setenv("RUNTIMEPULSE_OPENCODE_BIN", bin)
 
 	o := OpenCode{}

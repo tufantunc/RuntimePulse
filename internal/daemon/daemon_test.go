@@ -8,7 +8,16 @@ import (
 	"time"
 
 	"github.com/tufantunc/RuntimePulse/internal/client"
+	"github.com/tufantunc/RuntimePulse/internal/mockexe"
 )
+
+// TestMain lets this test binary double as the mocked agent CLI
+// (re-exec pattern; see internal/mockexe). Main is a no-op unless the
+// mockexe sentinel env var marks the process as a spawned child.
+func TestMain(m *testing.M) {
+	mockexe.Main()
+	os.Exit(m.Run())
+}
 
 // Short tempdir: macOS unix socket paths are limited to ~104 bytes.
 func shortTempDir(t *testing.T) string {
