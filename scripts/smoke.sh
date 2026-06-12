@@ -21,6 +21,21 @@ export RUNTIMEPULSE_CLAUDE_BIN="$dir/mock-claude"
 go build -o "$dir/runtimepulse" ./cmd/runtimepulse
 rp="$dir/runtimepulse"
 
+# has <substring> -- <command...>: true if the command's stdout contains
+# the substring. Captures output first and matches with pure-bash [[ ]]
+# — never pipes into `grep -q`, which under `set -o pipefail` reports a
+# spurious failure when grep matches early and SIGPIPEs the producer.
+has() {
+  local needle="$1"; shift
+  local out; out=$("$@")
+  [[ "$out" == *"$needle"* ]]
+}
+# count <substring> -- <command...>: number of output lines containing it.
+count() {
+  local needle="$1"; shift
+  "$@" | grep -c "$needle" || true   # grep -c reads all input: no SIGPIPE
+}
+
 "$rp" daemon >"$dir/daemon-out.log" 2>&1 &
 dpid=$!
 sleep 0.5
@@ -35,15 +50,15 @@ sleep 0.3
 
 "$rp" inject --type docker.healthy --source postgres --payload container=postgres
 
-# The dispatcher picks up continuations immediately; pending counts are transient.
-# Assert via total continuation rows for the session instead.
+# oneShot: exactly one continuation row ever exists for smoke-1,
+# regardless of dispatch state (it gets run against the mock).
 sleep 1
-smoke1_total=$("$rp" continuations | grep -c smoke-1)
+smoke1_total=$(count smoke-1 "$rp" continuations)
 [ "$smoke1_total" -eq 1 ] || { echo "FAIL: expected 1 continuation for smoke-1, got $smoke1_total"; exit 1; }
 
-# oneShot: same event again must not create a second continuation
+# same event again must not create a second continuation
 "$rp" inject --type docker.healthy --source postgres
-smoke1_total=$("$rp" continuations | grep -c smoke-1)
+smoke1_total=$(count smoke-1 "$rp" continuations)
 [ "$smoke1_total" -eq 1 ] || { echo "FAIL: oneShot consumed twice, smoke-1 got $smoke1_total continuations"; exit 1; }
 
 sleep 0.3
@@ -58,22 +73,22 @@ grep -q 'docker.healthy' "$dir/follow.jsonl" || { echo "FAIL: follow stream empt
 sleep 0.3
 touch "$dir/artifact.txt"
 sleep 1.2
-smoke2_total=$("$rp" continuations | grep -c smoke-2)
+smoke2_total=$(count smoke-2 "$rp" continuations)
 [ "$smoke2_total" -eq 1 ] || { echo "FAIL: file watch did not fire rule (smoke-2 continuations: $smoke2_total)"; exit 1; }
 
 # --- exec wrapper: success and failure both produce events ---
 "$rp" exec --label smoke-build -- true
 if "$rp" exec --label smoke-build -- false; then echo "FAIL: exec must preserve exit code"; exit 1; fi
-"$rp" events --type exec.succeeded | grep -q smoke-build || { echo "FAIL: exec.succeeded missing"; exit 1; }
-"$rp" events --type exec.failed | grep -q smoke-build || { echo "FAIL: exec.failed missing"; exit 1; }
+has smoke-build "$rp" events --type exec.succeeded || { echo "FAIL: exec.succeeded missing"; exit 1; }
+has smoke-build "$rp" events --type exec.failed || { echo "FAIL: exec.failed missing"; exit 1; }
 
 # --- watch survives daemon restart (re-arm) ---
-"$rp" watch list | grep -q '"type":"file"' || { echo "FAIL: watch not persisted"; exit 1; }
+has '"type":"file"' "$rp" watch list || { echo "FAIL: watch not persisted"; exit 1; }
 kill $dpid && wait $dpid 2>/dev/null || true
 "$rp" daemon >"$dir/daemon-out2.log" 2>&1 &
 dpid=$!
 sleep 0.5
-"$rp" watch list | grep -q '"type":"file"' || { echo "FAIL: watch lost after restart"; exit 1; }
+has '"type":"file"' "$rp" watch list || { echo "FAIL: watch lost after restart"; exit 1; }
 
 # --- dispatcher: event → resume (mock claude) → chained second step ---
 "$rp" session register --agent claude --session smoke-3 --repo "$dir"
@@ -82,25 +97,26 @@ sleep 0.5
 "$rp" rule add --on continuation.completed:chain-1 --session smoke-3 \
   --prompt 'Step one done. Do step two.' --one-shot --label chain-2
 "$rp" inject --type tcp.available --source smoke-tcp
-# Poll for the chain-2 completion EVENT, not the continuation count:
-# a continuation is marked completed slightly before its
-# continuation.completed event is emitted, so the event is the true
-# end-of-chain signal. Its presence implies both hops ran.
+# Poll for the chain-2 completion EVENT (the true end-of-chain signal,
+# emitted just after its continuation flips to completed). Its presence
+# implies both hops ran.
+chained=""
 for _ in $(seq 1 50); do
-  "$rp" events --type continuation.completed | grep -q chain-2 && break
+  if has chain-2 "$rp" events --type continuation.completed; then chained=1; break; fi
   sleep 0.2
 done
-"$rp" events --type continuation.completed | grep -q chain-2 || { echo "FAIL: chain-2 completion event missing"; exit 1; }
-completed=$("$rp" continuations --state completed | grep -c smoke-3 || true)
+[ -n "$chained" ] || { echo "FAIL: chain-2 completion event missing"; exit 1; }
+completed=$(count smoke-3 "$rp" continuations --state completed)
 [ "$completed" -eq 2 ] || { echo "FAIL: chain expected 2 completed continuations for smoke-3, got $completed"; exit 1; }
 
 # --- manual continue ---
 "$rp" continue --session smoke-3 --prompt "manual poke"
+manual=""
 for _ in $(seq 1 25); do
-  "$rp" continuations --state completed | grep -q '"label":"manual"' && break
+  if has '"label":"manual"' "$rp" continuations --state completed; then manual=1; break; fi
   sleep 0.2
 done
-"$rp" continuations --state completed | grep -q '"label":"manual"' || { echo "FAIL: manual continuation missing"; exit 1; }
+[ -n "$manual" ] || { echo "FAIL: manual continuation missing"; exit 1; }
 
 # --- MCP server: stdio handshake lists the five tools ---
 mcp_in="$dir/mcp_in.jsonl"
@@ -113,7 +129,7 @@ JSONL
 # tools/list response before EOF closes the stream.
 mcp_out=$( (cat "$mcp_in"; sleep 1) | "$rp" mcp 2>/dev/null || true)
 for tool in create_watch create_rule wait_for_event get_events cancel_rule; do
-  echo "$mcp_out" | grep -q "$tool" || { echo "FAIL: MCP tools/list missing $tool"; exit 1; }
+  [[ "$mcp_out" == *"$tool"* ]] || { echo "FAIL: MCP tools/list missing $tool"; exit 1; }
 done
 
 echo "SMOKE OK"
