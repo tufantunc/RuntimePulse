@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/tufantunc/RuntimePulse/internal/daemon"
+	"github.com/tufantunc/RuntimePulse/internal/version"
 )
 
 func daemonCmd() *cobra.Command {
@@ -32,7 +33,7 @@ func daemonCmd() *cobra.Command {
 					return fmt.Errorf("starting ws server: %w", err)
 				}
 			}
-			fmt.Printf("runtimepulse daemon %s listening on %s\n", daemon.Version, daemon.SocketPath(dir))
+			fmt.Printf("runtimepulse daemon %s listening on %s\n", version.String(), daemon.SocketPath(dir))
 			return d.Serve(ctx)
 		},
 	}

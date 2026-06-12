@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/tufantunc/RuntimePulse/internal/core"
+	"github.com/tufantunc/RuntimePulse/internal/version"
 	"github.com/tufantunc/RuntimePulse/internal/watch"
 )
 
@@ -240,7 +241,7 @@ func (d *Daemon) status() (any, error) {
 		lastEvent = events[0].Type + " @ " + events[0].Timestamp.Format(time.RFC3339)
 	}
 	return map[string]any{
-		"version":              Version,
+		"version":              version.String(),
 		"rules":                len(rules),
 		"sessions":             len(sessions),
 		"pendingContinuations": len(pending),

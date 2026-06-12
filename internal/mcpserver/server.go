@@ -7,15 +7,13 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/tufantunc/RuntimePulse/internal/client"
+	"github.com/tufantunc/RuntimePulse/internal/version"
 )
-
-// Version is reported to MCP clients during initialize.
-const Version = "0.1.0-dev"
 
 // New builds the MCP server. Tools are registered in registerTools
 // (Tasks 2–4); the skeleton registers none yet.
 func New(c *client.Client) *mcp.Server {
-	srv := mcp.NewServer(&mcp.Implementation{Name: "runtimepulse", Version: Version}, nil)
+	srv := mcp.NewServer(&mcp.Implementation{Name: "runtimepulse", Version: version.String()}, nil)
 	registerTools(srv, c)
 	return srv
 }

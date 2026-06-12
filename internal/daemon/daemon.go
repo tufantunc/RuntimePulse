@@ -23,8 +23,6 @@ import (
 	"github.com/tufantunc/RuntimePulse/internal/wsserver"
 )
 
-const Version = "0.1.0-dev"
-
 type Daemon struct {
 	Dir      string
 	Engine   *engine.Engine
