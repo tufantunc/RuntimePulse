@@ -19,8 +19,9 @@ agent -p --resume <chat-id> --output-format json --workspace <repo> "<prompt>"
 
 * `--resume [chatId]` resumes a chat session; `--continue` is an alias for `--resume=-1` (latest).
 * `-p` / `--print`: non-interactive mode. Prompt is a positional argument.
-* **UNVERIFIED:** no official example combines `-p` with `--resume`; both are documented global options. The adapter's `Validate()` must smoke-test the combination (e.g. `agent create-chat` → resume it).
+* **VERIFIED live 2026-06-12:** `agent -p --resume <id> --output-format json -- <prompt>` resumes a real chat session end-to-end (RuntimePulse continuation completed, model reply captured). No official doc combines `-p` with `--resume`, but it works.
 * Unattended file edits require `-f` / `--force` (alias `--yolo`); `--trust` trusts the workspace without prompting (headless only).
+* RuntimePulse deliberately does NOT pass `--trust` (v1 no-permission-flags decision). This is not a gap: a resume only happens for a session that already exists, and that session exists only because the user opened cursor in that workspace — which already established trust. The `--trust` wall appears solely for a never-opened workspace, where there is no session to resume. (Verified live 2026-06-12: a pre-trusted workspace resumes cleanly via `agent -p --resume <id> --output-format json -- <prompt>`.)
 
 Sources: [parameters](https://cursor.com/docs/cli/reference/parameters), [headless](https://cursor.com/docs/cli/headless)
 
