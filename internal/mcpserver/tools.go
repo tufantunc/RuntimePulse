@@ -79,12 +79,12 @@ func cancelRuleHandler(c *client.Client) mcp.ToolHandlerFor[CancelRuleInput, OKO
 type CreateRuleInput struct {
 	EventType string `json:"eventType" jsonschema:"event type to match, e.g. docker.healthy or continuation.completed"`
 	Source    string `json:"source,omitempty" jsonschema:"optional event source filter, e.g. a container name"`
-	SessionID string `json:"sessionId" jsonschema:"the agent session to resume when the event matches"`
+	SessionID string `json:"sessionId" jsonschema:"the session to resume when the event matches — normally your own session id"`
 	Agent     string `json:"agent,omitempty" jsonschema:"agent type (claude|cursor|codex|opencode); with repoPath, self-registers the session"`
 	RepoPath  string `json:"repoPath,omitempty" jsonschema:"session repo path; with agent, self-registers the session"`
 	Prompt    string `json:"prompt" jsonschema:"Go text/template prompt; only event fields are available, e.g. {{.Event.Source}}"`
 	Label     string `json:"label,omitempty" jsonschema:"rule label; becomes the source of the continuation.* result event"`
-	OneShot   bool   `json:"oneShot,omitempty" jsonschema:"consume the rule after its first match"`
+	OneShot   bool   `json:"oneShot,omitempty" jsonschema:"consume the rule after its first match — preferred for wake-me-once flows"`
 	ExpiresAt string `json:"expiresAt,omitempty" jsonschema:"optional RFC3339 expiry"`
 }
 
