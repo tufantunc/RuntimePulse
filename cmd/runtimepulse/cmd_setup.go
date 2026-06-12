@@ -116,10 +116,12 @@ func setupCmd() *cobra.Command {
 				return promptYesNo("\nAdd the release-and-resume guidance to your agents' global instructions? [y/N]: ")
 			}) {
 				fmt.Println()
-				out := formatRuleResults(setup.WriteRules(agents, installed, home, false))
-				fmt.Print(out)
-				if strings.Contains(out, "✗ rules:") {
-					failed = true
+				ruleResults := setup.WriteRules(agents, installed, home, false)
+				fmt.Print(formatRuleResults(ruleResults))
+				for _, r := range ruleResults {
+					if r.Err != nil {
+						failed = true
+					}
 				}
 			}
 			if failed {
