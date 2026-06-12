@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/tufantunc/RuntimePulse/internal/client"
 	"github.com/tufantunc/RuntimePulse/internal/daemon"
@@ -120,5 +121,73 @@ func TestCreateRuleBadTemplateIsToolError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("bad template must surface as a tool error")
+	}
+}
+
+func TestWaitForEventReturnsLiveMatch(t *testing.T) {
+	c := newTestDaemonClient(t)
+	h := waitForEventHandler(c)
+
+	got := make(chan WaitOutput, 1)
+	go func() {
+		_, out, err := h(context.Background(), nil, WaitForEventInput{
+			EventType: "http.available", Source: "localhost:3000", TimeoutSeconds: 5,
+		})
+		if err != nil {
+			t.Errorf("wait_for_event: %v", err)
+		}
+		got <- out
+	}()
+
+	time.Sleep(150 * time.Millisecond) // let the subscription arm
+	if err := c.Call("event.inject",
+		map[string]any{"type": "http.available", "source": "localhost:3000"}, nil); err != nil {
+		t.Fatal(err)
+	}
+
+	select {
+	case out := <-got:
+		if out.TimedOut || out.Event.Type != "http.available" || out.Event.Source != "localhost:3000" {
+			t.Fatalf("unexpected wait result: %#v", out)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("wait_for_event did not return on a live match")
+	}
+}
+
+func TestWaitForEventTimesOut(t *testing.T) {
+	c := newTestDaemonClient(t)
+	h := waitForEventHandler(c)
+	_, out, err := h(context.Background(), nil, WaitForEventInput{
+		EventType: "never.happens", TimeoutSeconds: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !out.TimedOut {
+		t.Fatalf("expected timeout, got %#v", out)
+	}
+}
+
+func TestWaitForEventFiltersSource(t *testing.T) {
+	c := newTestDaemonClient(t)
+	h := waitForEventHandler(c)
+	got := make(chan WaitOutput, 1)
+	go func() {
+		_, out, _ := h(context.Background(), nil, WaitForEventInput{
+			EventType: "docker.healthy", Source: "postgres", TimeoutSeconds: 5,
+		})
+		got <- out
+	}()
+	time.Sleep(150 * time.Millisecond)
+	c.Call("event.inject", map[string]any{"type": "docker.healthy", "source": "redis"}, nil)    // non-match
+	c.Call("event.inject", map[string]any{"type": "docker.healthy", "source": "postgres"}, nil) // match
+	select {
+	case out := <-got:
+		if out.TimedOut || out.Event.Source != "postgres" {
+			t.Fatalf("source filter failed: %#v", out)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("wait_for_event did not return")
 	}
 }

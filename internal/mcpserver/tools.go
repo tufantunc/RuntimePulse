@@ -2,6 +2,7 @@ package mcpserver
 
 import (
 	"context"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -101,5 +102,57 @@ func createRuleHandler(c *client.Client) mcp.ToolHandlerFor[CreateRuleInput, Rul
 			"prompt": in.Prompt, "label": in.Label, "oneShot": in.OneShot, "expiresAt": in.ExpiresAt,
 		}, &out)
 		return nil, out, err
+	}
+}
+
+// --- wait_for_event ---------------------------------------------------
+
+type WaitForEventInput struct {
+	EventType      string `json:"eventType" jsonschema:"event type to wait for, e.g. http.available"`
+	Source         string `json:"source,omitempty" jsonschema:"optional source filter"`
+	TimeoutSeconds int    `json:"timeoutSeconds,omitempty" jsonschema:"max seconds to block (default 300)"`
+}
+
+type WaitOutput struct {
+	TimedOut bool       `json:"timedOut"`
+	Event    core.Event `json:"event,omitempty"`
+}
+
+const defaultWaitTimeout = 300 * time.Second
+
+// waitForEventHandler blocks until a matching event is published on the
+// daemon bus (LIVE only — events from before the call are not seen) or
+// the timeout elapses. The "is it already ready?" case is served by
+// create_watch (initial-check) + create_rule (release-and-resume).
+func waitForEventHandler(c *client.Client) mcp.ToolHandlerFor[WaitForEventInput, WaitOutput] {
+	return func(ctx context.Context, _ *mcp.CallToolRequest, in WaitForEventInput) (*mcp.CallToolResult, WaitOutput, error) {
+		timeout := defaultWaitTimeout
+		if in.TimeoutSeconds > 0 {
+			timeout = time.Duration(in.TimeoutSeconds) * time.Second
+		}
+		waitCtx, cancel := context.WithTimeout(ctx, timeout)
+		defer cancel()
+
+		var match core.Event
+		found := false
+		// Follow returns when waitCtx is cancelled (timeout or first match).
+		err := c.Follow(waitCtx, func(ev core.Event) {
+			if found {
+				return
+			}
+			if ev.Type == in.EventType && (in.Source == "" || ev.Source == in.Source) {
+				match, found = ev, true
+				cancel() // stop the stream
+			}
+		})
+		// A cancelled Follow returns nil (see client.Follow); a real
+		// transport error is reported as a tool error.
+		if err != nil {
+			return nil, WaitOutput{}, err
+		}
+		if !found {
+			return nil, WaitOutput{TimedOut: true}, nil
+		}
+		return nil, WaitOutput{Event: match}, nil
 	}
 }

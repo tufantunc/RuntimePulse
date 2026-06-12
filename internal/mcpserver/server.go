@@ -36,4 +36,9 @@ func registerTools(srv *mcp.Server, c *client.Client) {
 		Description: "Bind an event to a session resume: when eventType (optionally from source) fires, " +
 			"resume sessionId with the rendered prompt. Pass agent+repoPath to register the session in the same call.",
 	}, createRuleHandler(c))
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "wait_for_event",
+		Description: "Block until a matching event is published (live only; events before the call are not seen), " +
+			"or until timeoutSeconds elapses. For 'is it already ready?', prefer create_watch + create_rule.",
+	}, waitForEventHandler(c))
 }
