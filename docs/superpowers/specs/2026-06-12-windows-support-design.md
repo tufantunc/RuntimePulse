@@ -22,7 +22,7 @@ Consequence: the socket `os.Chmod(0600)` moves behind a build-tagged helper — 
 
 `ProcessProber` drops the `pgrep -f` subprocess entirely. `github.com/shirou/gopsutil/v4/process` enumerates processes and the prober matches the pattern against each full command line. Owner explicitly chose the library over `tasklist` (name-only matching) and PowerShell CIM (slow), and chose **all platforms** over Windows-only to keep one code path and identical semantics everywhere.
 
-Semantics change (documented in usage docs): the pattern is a **case-sensitive substring of the full command line** — a deliberate simplification from pgrep's regex, predictable and identical on every OS. The prober excludes its own PID and its parent (mirrors pgrep's self-exclusion; prevents the daemon matching itself).
+Semantics change (documented in usage docs): the pattern is a **case-sensitive substring of the full command line** — a deliberate simplification from pgrep's regex, predictable and identical on every OS. The prober excludes its own PID (the daemon process, since the prober runs in-process); as today, a pattern that happens to match another `runtimepulse` invocation's argv will match it — same caveat pgrep had, kept documented.
 
 This deviates from the "CLI subprocesses, no SDKs" convention recorded for docker — by owner decision, scoped to process probing. The docker watcher stays subprocess-based.
 
