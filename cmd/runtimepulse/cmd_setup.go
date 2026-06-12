@@ -14,7 +14,7 @@ import (
 )
 
 func setupCmd() *cobra.Command {
-	var all, yes, project, dryRun bool
+	var all, yes, project, dryRun, rules, noRules bool
 	var only string
 	cmd := &cobra.Command{
 		Use:   "setup",
@@ -75,6 +75,9 @@ func setupCmd() *cobra.Command {
 			if dryRun {
 				fmt.Printf("\n[dry-run] would register RuntimePulse (%s scope) for: %s\n",
 					scope.String(), strings.Join(installed, ", "))
+				if rules {
+					fmt.Print("\n" + formatRuleResults(setup.WriteRules(agents, installed, home, true)))
+				}
 				return nil
 			}
 
@@ -108,6 +111,19 @@ func setupCmd() *cobra.Command {
 				}
 			}
 			fmt.Println("\nDone. Restart any running agent sessions to pick up the new MCP server.")
+			interactive := term.IsTerminal(int(os.Stdin.Fd()))
+			if shouldWriteRules(rules, noRules, interactive, func() bool {
+				return promptYesNo("\nAdd the release-and-resume guidance to your agents' global instructions? [y/N]: ")
+			}) {
+				fmt.Println()
+				ruleResults := setup.WriteRules(agents, installed, home, false)
+				fmt.Print(formatRuleResults(ruleResults))
+				for _, r := range ruleResults {
+					if r.Err != nil {
+						failed = true
+					}
+				}
+			}
 			if failed {
 				return fmt.Errorf("one or more agents failed to register")
 			}
@@ -119,6 +135,8 @@ func setupCmd() *cobra.Command {
 	cmd.Flags().StringVar(&only, "agent", "", "target specific agents, comma-separated (claude|cursor|codex|opencode)")
 	cmd.Flags().BoolVar(&project, "project", false, "register in the current project instead of user scope")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "show what would happen, write nothing")
+	cmd.Flags().BoolVar(&rules, "rules", false, "also install the release-and-resume guidance into agents' global instructions")
+	cmd.Flags().BoolVar(&noRules, "no-rules", false, "skip the global-instruction guidance step without prompting")
 	return cmd
 }
 
@@ -182,6 +200,60 @@ func parseSelection(input string, candidates []string) ([]string, error) {
 		}
 	}
 	return out, nil
+}
+
+// shouldWriteRules decides whether the rules step runs. --no-rules always
+// wins; then --rules; otherwise, interactively prompt (default N), and
+// non-interactively default to skip.
+func shouldWriteRules(rules, noRules, interactive bool, prompt func() bool) bool {
+	switch {
+	case noRules:
+		return false
+	case rules:
+		return true
+	case interactive:
+		return prompt()
+	default:
+		return false
+	}
+}
+
+// formatRuleResults renders the per-agent rule lines plus, if any agent is
+// manual (cursor), the paste-into-Settings block.
+func formatRuleResults(results []setup.RuleResult) string {
+	var b strings.Builder
+	var manual *setup.RuleResult
+	for i := range results {
+		r := results[i]
+		switch {
+		case r.Err != nil:
+			fmt.Fprintf(&b, "  %-10s ✗ rules: %v\n", r.Agent, r.Err)
+		case r.Manual:
+			fmt.Fprintf(&b, "  %-10s • rules: paste manually (see below)\n", r.Agent)
+			manual = &results[i]
+		case r.Action == "unchanged":
+			fmt.Fprintf(&b, "  %-10s • rules unchanged (%s)\n", r.Agent, r.Path)
+		case r.Action == "would-write":
+			fmt.Fprintf(&b, "  %-10s ✓ rules: would write (%s)\n", r.Agent, r.Path)
+		default: // written | updated | appended
+			fmt.Fprintf(&b, "  %-10s ✓ rules %s (%s)\n", r.Agent, r.Action, r.Path)
+		}
+	}
+	if manual != nil {
+		b.WriteString("\ncursor — paste this into Settings → Rules → User Rules:\n\n")
+		for _, ln := range strings.Split(manual.Text, "\n") {
+			fmt.Fprintf(&b, "    %s\n", ln)
+		}
+	}
+	return b.String()
+}
+
+// promptYesNo reads a single y/N answer from stdin (default N).
+func promptYesNo(prompt string) bool {
+	fmt.Print(prompt)
+	line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+	line = strings.ToLower(strings.TrimSpace(line))
+	return line == "y" || line == "yes"
 }
 
 // selectAgents shows a numbered picker on a TTY; with no TTY it returns

@@ -39,16 +39,23 @@ func mergeJSONServer(path, section, name string, entry map[string]any) error {
 	}
 	out = append(out, '\n')
 
+	return atomicWrite(path, out)
+}
+
+// atomicWrite writes data to path via a temp file in the same directory
+// plus os.Rename, creating parent dirs (0o700). The rename is atomic on
+// the same filesystem; the temp is cleaned up if the rename never happens.
+func atomicWrite(path string, data []byte) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".mcp-*.tmp")
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".rp-*.tmp")
 	if err != nil {
 		return err
 	}
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName) // no-op after a successful rename
-	if _, err := tmp.Write(out); err != nil {
+	if _, err := tmp.Write(data); err != nil {
 		tmp.Close()
 		return err
 	}

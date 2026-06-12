@@ -80,7 +80,7 @@ Auto-detects your platform, verifies checksums, installs to `~/.local/bin` (over
 
 **Manual download (all platforms, incl. Windows):** grab the archive for your OS/arch from the [releases page](https://github.com/tufantunc/RuntimePulse/releases) — Windows ships as a zip — and put `runtimepulse` on your PATH.
 
-Then register RuntimePulse with your installed agents: `runtimepulse setup` (detects Claude/Cursor/Codex/OpenCode and wires up the MCP server).
+Then register RuntimePulse with your installed agents: `runtimepulse setup` (detects Claude/Cursor/Codex/OpenCode and wires up the MCP server). Add `--rules` to also write the opt-in release-and-resume guidance into each agent's global instruction file (or `--no-rules` to skip the prompt); see [docs/usage/mcp.md](docs/usage/mcp.md).
 
 **From source:** requires Go 1.26+ — `go build -o runtimepulse ./cmd/runtimepulse` (reports its version as `dev (<commit>)`).
 
