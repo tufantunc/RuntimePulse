@@ -2,6 +2,7 @@ package setup
 
 import (
 	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -70,4 +71,77 @@ func mergeMarkerBlock(path string, dryRun bool) (string, error) {
 		return "", err
 	}
 	return action, nil
+}
+
+// RuleResult is the outcome of installing the rule for one agent.
+type RuleResult struct {
+	Agent  string
+	Action string // written | updated | appended | unchanged | would-write | manual
+	Path   string // file written, or "" for manual
+	Manual bool   // true for cursor — caller prints Text
+	Text   string // marker-less paste text (manual only)
+	Err    error
+}
+
+// RuleWriter installs the global release-and-resume rule for one agent.
+type RuleWriter interface {
+	WriteRule(dryRun bool) RuleResult
+}
+
+// fileRuleWriter writes the marker block into a global instruction file.
+type fileRuleWriter struct {
+	agent string
+	path  string
+}
+
+func (w fileRuleWriter) WriteRule(dryRun bool) RuleResult {
+	action, err := mergeMarkerBlock(w.path, dryRun)
+	return RuleResult{Agent: w.agent, Action: action, Path: w.path, Err: err}
+}
+
+// manualRuleWriter writes nothing; it returns paste-ready text (cursor).
+type manualRuleWriter struct{ agent string }
+
+func (w manualRuleWriter) WriteRule(dryRun bool) RuleResult {
+	return RuleResult{
+		Agent:  w.agent,
+		Action: "manual",
+		Manual: true,
+		Text:   strings.TrimSpace(releaseResumeRuleBody),
+	}
+}
+
+// ruleWriterFor returns the writer for an agent, or nil if unknown.
+// File paths are home-based to match the package's testable agents.
+func ruleWriterFor(name, home string) RuleWriter {
+	switch name {
+	case "claude":
+		return fileRuleWriter{agent: "claude", path: filepath.Join(home, ".claude", "CLAUDE.md")}
+	case "codex":
+		return fileRuleWriter{agent: "codex", path: filepath.Join(home, ".codex", "AGENTS.md")}
+	case "opencode":
+		return fileRuleWriter{agent: "opencode", path: filepath.Join(home, ".config", "opencode", "AGENTS.md")}
+	case "cursor":
+		return manualRuleWriter{agent: "cursor"}
+	}
+	return nil
+}
+
+// WriteRules installs the rule for each selected agent, preserving the
+// order of agents. Mirrors Run; rule install is always global scope.
+func WriteRules(agents []Agent, names []string, home string, dryRun bool) []RuleResult {
+	selected := map[string]bool{}
+	for _, n := range names {
+		selected[n] = true
+	}
+	var out []RuleResult
+	for _, a := range agents {
+		if !selected[a.Name()] {
+			continue
+		}
+		if w := ruleWriterFor(a.Name(), home); w != nil {
+			out = append(out, w.WriteRule(dryRun))
+		}
+	}
+	return out
 }

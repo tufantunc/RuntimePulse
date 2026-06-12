@@ -102,3 +102,73 @@ func TestMergeMarkerBlockDryRunWritesNothing(t *testing.T) {
 		t.Fatalf("dry-run created the file")
 	}
 }
+
+func TestFileRuleWriterWritesGlobalFile(t *testing.T) {
+	home := t.TempDir()
+	w := ruleWriterFor("claude", home)
+	if w == nil {
+		t.Fatal("no writer for claude")
+	}
+	res := w.WriteRule(false)
+	if res.Err != nil {
+		t.Fatal(res.Err)
+	}
+	if res.Action != "written" {
+		t.Fatalf("action = %q, want written", res.Action)
+	}
+	want := filepath.Join(home, ".claude", "CLAUDE.md")
+	if res.Path != want {
+		t.Fatalf("path = %q, want %q", res.Path, want)
+	}
+	if _, err := os.Stat(want); err != nil {
+		t.Fatalf("file not written: %v", err)
+	}
+}
+
+func TestRuleWriterForPaths(t *testing.T) {
+	home := "/home/u"
+	cases := map[string]string{
+		"claude":   filepath.Join(home, ".claude", "CLAUDE.md"),
+		"codex":    filepath.Join(home, ".codex", "AGENTS.md"),
+		"opencode": filepath.Join(home, ".config", "opencode", "AGENTS.md"),
+	}
+	for name, wantPath := range cases {
+		w := ruleWriterFor(name, home)
+		fw, ok := w.(fileRuleWriter)
+		if !ok {
+			t.Fatalf("%s: not a fileRuleWriter", name)
+		}
+		if fw.path != wantPath {
+			t.Fatalf("%s path = %q, want %q", name, fw.path, wantPath)
+		}
+	}
+}
+
+func TestManualRuleWriterCursor(t *testing.T) {
+	w := ruleWriterFor("cursor", t.TempDir())
+	res := w.WriteRule(false)
+	if !res.Manual || res.Action != "manual" {
+		t.Fatalf("cursor should be manual: %#v", res)
+	}
+	if res.Path != "" {
+		t.Fatalf("cursor should write no file, got path %q", res.Path)
+	}
+	if !strings.Contains(res.Text, "release-and-resume") {
+		t.Fatalf("paste text missing rule body: %q", res.Text)
+	}
+	if strings.Contains(res.Text, ruleBeginMarker) {
+		t.Fatalf("paste text must not contain markers: %q", res.Text)
+	}
+}
+
+func TestWriteRulesSelectsInstalledAgents(t *testing.T) {
+	home := t.TempDir()
+	agents := []Agent{claudeAgent{}, cursorAgent{home: home}, codexAgent{}, openCodeAgent{home: home}}
+	results := WriteRules(agents, []string{"claude", "cursor"}, home, false)
+	if len(results) != 2 {
+		t.Fatalf("got %d results, want 2", len(results))
+	}
+	if results[0].Agent != "claude" || results[1].Agent != "cursor" {
+		t.Fatalf("unexpected order/agents: %#v", results)
+	}
+}
