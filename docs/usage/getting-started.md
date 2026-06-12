@@ -104,6 +104,8 @@ runtimepulse continuations --state failed # see what went wrong, with output sum
 
 All output is JSON lines — pipe into `jq` freely.
 
+Old state cleans itself up: the daemon hourly prunes sessions idle for 7+ days (unless an active rule references them), terminal continuations and events older than 30 days — no manual `session rm` needed.
+
 ## Testing the pipeline without real conditions
 
 `inject` feeds a synthetic event straight into the engine — useful for testing rules and for external producers (CI, scripts):

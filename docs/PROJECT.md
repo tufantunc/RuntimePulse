@@ -317,7 +317,7 @@ steps:
 
 ## 8. Storage
 
-Single SQLite database (WAL mode), CGO-free driver (`modernc.org/sqlite`). Tables: `events`, `watches`, `rules`, `sessions`, `continuations`. Events are pruned automatically (configurable retention, default 30 days or size cap). The unix socket and database live under `~/.runtimepulse/`.
+Single SQLite database (WAL mode), CGO-free driver (`modernc.org/sqlite`). Tables: `events`, `watches`, `rules`, `sessions`, `continuations`. A retention sweep runs hourly in the daemon (and at boot): idle sessions are removed after 7 days — never while running or referenced by an active rule — terminal continuations after 30 days, events after 30 days. The unix socket and database live under `~/.runtimepulse/`.
 
 ## 9. Security Posture
 
