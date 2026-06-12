@@ -46,10 +46,17 @@ curl -fsSL -o "$tmp/$archive" "$base/$archive"
 curl -fsSL -o "$tmp/SHA256SUMS" "$base/SHA256SUMS"
 
 verify() {
+  # Fail CLOSED: capture the expected line first — macOS's native
+  # sha256sum exits 0 on empty -c input, so piping a no-match grep
+  # straight in would silently skip verification.
+  line=$(grep " $archive\$" "$tmp/SHA256SUMS") || {
+    echo "error: $archive not found in SHA256SUMS — refusing to install" >&2
+    exit 1
+  }
   if command -v sha256sum >/dev/null 2>&1; then
-    (cd "$tmp" && grep " $archive\$" SHA256SUMS | sha256sum -c - >/dev/null)
+    printf '%s\n' "$line" | (cd "$tmp" && sha256sum -c - >/dev/null)
   elif command -v shasum >/dev/null 2>&1; then
-    (cd "$tmp" && grep " $archive\$" SHA256SUMS | shasum -a 256 -c - >/dev/null)
+    printf '%s\n' "$line" | (cd "$tmp" && shasum -a 256 -c - >/dev/null)
   else
     echo "error: need sha256sum or shasum to verify the download" >&2
     exit 1

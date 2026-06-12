@@ -30,7 +30,7 @@ gets it via ldflags (`internal/version`).
 * Release page shows 6 archives + SHA256SUMS.
 * `curl -fsSL .../install.sh | sh` installs and `runtimepulse --version`
   prints the new version.
-* `brew install --cask tufantunc/tap/runtimepulse` (or `brew upgrade
+* `brew install --cask tufantunc/tap/runtimepulse` (or `brew upgrade --cask
   runtimepulse`) works. The cask includes a quarantine-removal hook because
   binaries are unsigned; Gatekeeper will not block the install.
 * `runtimepulse status` against a running old daemon prints the version

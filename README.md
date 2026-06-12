@@ -68,6 +68,8 @@ Runs on macOS, Linux, and Windows 10 1803+.
 brew install --cask tufantunc/tap/runtimepulse
 ```
 
+(Linux: requires Homebrew ≥ 4.5.)
+
 **Install script (macOS/Linux):**
 
 ```bash
