@@ -286,6 +286,8 @@ MCP is a tool interface on top of the daemon — not the core system.
 * **Wait in-turn** (`wait_for_event`): the agent's turn stays open and blocks. Costs context/timeout budget. Use for short waits.
 * **Release-and-resume** (`create_rule` + end turn): the agent ends its turn; RuntimePulse resumes it when the event fires. **Recommended** — this is the product's core flow.
 
+Agents register the server with: `claude mcp add --transport stdio runtimepulse -- runtimepulse mcp`. `wait_for_event` is live-only (blocks for an event published after the call); `create_rule` is the primary release-and-resume flow.
+
 ### 7.3 Workflow Files
 
 Multi-step chains are declared in YAML and compiled to rules by `runtimepulse apply`. There is no workflow entity in the core — only syntax sugar that emits rules. Steps chain through `continuation.completed` events.
@@ -362,7 +364,7 @@ Build order toward the final architecture (each stage lands fully designed, not 
 1. ✅ **Core:** SQLite store, event bus, rule engine, daemon skeleton + unix socket RPC.
 2. ✅ **Watchers:** http, docker, file, process, build, git — with initial-check + edge semantics.
 3. ✅ **Continuation:** dispatcher, per-session queues, supervision, Claude Code adapter first, then Cursor/Codex/OpenCode.
-4. **Interfaces:** full CLI surface, MCP server and tools.
+4. **Interfaces:** ✅ full CLI surface (stages 1–3), ✅ MCP server and tools (`create_watch`, `create_rule`, `wait_for_event`, `get_events`, `cancel_rule`) over stdio.
 5. **Layers:** workflow YAML compiler, WebSocket streaming (localhost + token), Claude Channels optimization.
 
 ## 14. Design Decisions

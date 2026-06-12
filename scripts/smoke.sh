@@ -92,4 +92,18 @@ completed=$("$rp" continuations --state completed | grep -c smoke-3)
 sleep 0.8
 "$rp" continuations --state completed | grep -q '"label":"manual"' || { echo "FAIL: manual continuation missing"; exit 1; }
 
+# --- MCP server: stdio handshake lists the five tools ---
+mcp_in="$dir/mcp_in.jsonl"
+cat > "$mcp_in" << 'JSONL'
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"smoke","version":"0"}}}
+{"jsonrpc":"2.0","method":"notifications/initialized"}
+{"jsonrpc":"2.0","id":2,"method":"tools/list"}
+JSONL
+# Keep stdin open briefly after the requests so the server flushes the
+# tools/list response before EOF closes the stream.
+mcp_out=$( (cat "$mcp_in"; sleep 1) | "$rp" mcp 2>/dev/null || true)
+for tool in create_watch create_rule wait_for_event get_events cancel_rule; do
+  echo "$mcp_out" | grep -q "$tool" || { echo "FAIL: MCP tools/list missing $tool"; exit 1; }
+done
+
 echo "SMOKE OK"
