@@ -10,7 +10,17 @@ import (
 	"os/exec"
 	"sync/atomic"
 	"testing"
+	"time"
+
+	"github.com/tufantunc/RuntimePulse/internal/mockexe"
 )
+
+// TestMain lets this test binary double as the marker child process
+// for TestProcessProber (re-exec pattern; see internal/mockexe).
+func TestMain(m *testing.M) {
+	mockexe.Main()
+	os.Exit(m.Run())
+}
 
 func TestHTTPProber(t *testing.T) {
 	var code atomic.Int32
@@ -66,24 +76,46 @@ func TestTCPProber(t *testing.T) {
 }
 
 func TestProcessProber(t *testing.T) {
-	if _, err := exec.LookPath("pgrep"); err != nil {
-		t.Skip("pgrep not available")
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
 	}
-	marker := fmt.Sprintf("31.41592%d", os.Getpid())
-	cmd := exec.Command("sleep", marker)
+	marker := fmt.Sprintf("rp-marker-%d", os.Getpid())
+	cmd := exec.Command(exe, marker) // marker lands in the child's cmdline
+	cmd.Env = append(os.Environ(), mockexe.Env(mockexe.Spec{DelayMs: 30000})...)
 	if err := cmd.Start(); err != nil {
 		t.Fatal(err)
 	}
 	defer func() { cmd.Process.Kill(); cmd.Wait() }()
 
-	p := ProcessProber("sleep " + marker)
+	p := ProcessProber(marker)
 	ctx := context.Background()
-	if !p(ctx) {
-		t.Fatal("running process must be found")
+	// process tables refresh asynchronously on some platforms; poll briefly
+	deadline := time.Now().Add(3 * time.Second)
+	for !p(ctx) {
+		if time.Now().After(deadline) {
+			t.Fatal("running marker process must be found")
+		}
+		time.Sleep(50 * time.Millisecond)
 	}
+
 	cmd.Process.Kill()
 	cmd.Wait()
-	if p(ctx) {
-		t.Fatal("dead process must not be found")
+	deadline = time.Now().Add(3 * time.Second)
+	for p(ctx) {
+		if time.Now().After(deadline) {
+			t.Fatal("dead marker process must not be found")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+func TestProcessProberExcludesSelf(t *testing.T) {
+	// our own test-binary path is in our own cmdline; the prober must
+	// not report US as a match for it
+	self, _ := os.Executable()
+	p := ProcessProber(self + " unique-never-spawned-suffix")
+	if p(context.Background()) {
+		t.Fatal("prober must not match a pattern only present in nonexistent processes")
 	}
 }

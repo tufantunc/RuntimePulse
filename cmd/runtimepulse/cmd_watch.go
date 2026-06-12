@@ -20,7 +20,7 @@ func watchAddCmd() *cobra.Command {
 		{"http", "url", "URL to probe (2xx/3xx = available)"},
 		{"tcp", "addr", "host:port to probe"},
 		{"file", "path", "file path to observe"},
-		{"process", "pattern", "pgrep -f pattern"},
+		{"process", "pattern", "command-line substring to match"},
 		{"docker", "container", "container name"},
 		{"git", "repo", "repository path"},
 	} {

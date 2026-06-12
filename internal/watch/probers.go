@@ -4,8 +4,11 @@ import (
 	"context"
 	"net"
 	"net/http"
-	"os/exec"
+	"os"
+	"strings"
 	"time"
+
+	"github.com/shirou/gopsutil/v4/process"
 )
 
 const probeTimeout = 2 * time.Second
@@ -50,11 +53,31 @@ func TCPProber(addr string) Prober {
 	}
 }
 
-// ProcessProber: running = `pgrep -f pattern` finds a process.
-// pgrep excludes itself; the daemon's own argv only matches if the
-// pattern happens to match "runtimepulse daemon".
+// ProcessProber: running = some process's full command line contains
+// pattern as a case-sensitive substring. Implemented with gopsutil on
+// every platform (owner decision, windows-support spec §2) — identical
+// semantics on macOS/Linux/Windows, no pgrep dependency. The prober's
+// own process (the daemon) is excluded; as with pgrep before it, a
+// pattern matching another runtimepulse invocation's argv will match.
 func ProcessProber(pattern string) Prober {
+	self := int32(os.Getpid())
 	return func(ctx context.Context) bool {
-		return exec.CommandContext(ctx, "pgrep", "-f", pattern).Run() == nil
+		procs, err := process.ProcessesWithContext(ctx)
+		if err != nil {
+			return false
+		}
+		for _, p := range procs {
+			if p.Pid == self {
+				continue
+			}
+			cmdline, err := p.CmdlineWithContext(ctx)
+			if err != nil || cmdline == "" {
+				continue // permission-denied or exited processes are not matches
+			}
+			if strings.Contains(cmdline, pattern) {
+				return true
+			}
+		}
+		return false
 	}
 }

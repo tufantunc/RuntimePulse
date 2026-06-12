@@ -14,7 +14,7 @@ import (
 
 type CreateWatchInput struct {
 	Type      string `json:"type" jsonschema:"watch type: http, tcp, file, process, docker or git"`
-	Target    string `json:"target" jsonschema:"what to watch (url, host:port, path, pgrep pattern, container, or repo)"`
+	Target    string `json:"target" jsonschema:"what to watch (url, host:port, path, command-line substring, container, or repo)"`
 	Interval  string `json:"interval,omitempty" jsonschema:"poll interval as a Go duration, e.g. 2s"`
 	Stability string `json:"stability,omitempty" jsonschema:"flap-suppression threshold as a Go duration, e.g. 5s"`
 }
