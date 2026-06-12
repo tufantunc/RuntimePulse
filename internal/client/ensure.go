@@ -5,7 +5,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"syscall"
 	"time"
 )
 
@@ -34,7 +33,7 @@ func EnsureDaemon(dir, socket string) (*Client, error) {
 	cmd := exec.Command(exe, "daemon")
 	cmd.Env = append(os.Environ(), "RUNTIMEPULSE_DIR="+dir)
 	cmd.Stdout, cmd.Stderr = logf, logf
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true} // survive parent exit
+	cmd.SysProcAttr = detachSysProcAttr() // survive parent exit
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}

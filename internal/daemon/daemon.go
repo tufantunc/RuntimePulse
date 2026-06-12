@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
 	"log"
 	"net"
 	"os"
@@ -13,8 +12,6 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
-
-	"golang.org/x/sys/unix"
 
 	"github.com/tufantunc/RuntimePulse/internal/adapter"
 	"github.com/tufantunc/RuntimePulse/internal/bus"
@@ -47,23 +44,6 @@ type Daemon struct {
 	dispatchStarted atomic.Bool
 }
 
-// acquireLock takes an exclusive, non-blocking flock on dir/daemon.lock
-// for the daemon's lifetime. It serializes socket acquisition across
-// concurrent autostarts: net.Listen("unix") is bind-then-listen, so an
-// unguarded stale-socket probe could unlink a live daemon's socket in
-// the window between the two.
-func acquireLock(dir string) (*os.File, error) {
-	f, err := os.OpenFile(filepath.Join(dir, "daemon.lock"), os.O_CREATE|os.O_RDWR, 0o600)
-	if err != nil {
-		return nil, err
-	}
-	if err := unix.Flock(int(f.Fd()), unix.LOCK_EX|unix.LOCK_NB); err != nil {
-		f.Close()
-		return nil, fmt.Errorf("daemon already starting or running (lock held): %w", err)
-	}
-	return f, nil
-}
-
 func New(dir string) (*Daemon, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, err
@@ -87,7 +67,7 @@ func New(dir string) (*Daemon, error) {
 		lock.Close()
 		return nil, err // includes "address already in use" → daemon already running
 	}
-	if err := os.Chmod(sock, 0o600); err != nil {
+	if err := chmodSocket(sock); err != nil {
 		ln.Close()
 		st.Close()
 		lock.Close()

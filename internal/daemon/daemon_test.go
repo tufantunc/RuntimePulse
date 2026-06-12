@@ -3,6 +3,7 @@ package daemon
 import (
 	"context"
 	"os"
+	"runtime"
 	"testing"
 	"time"
 
@@ -120,6 +121,9 @@ func TestRuleAddInvalidTemplateHasNoSideEffects(t *testing.T) {
 }
 
 func TestSocketPermissions(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("socket file permissions are not meaningful on Windows (ACL model)")
+	}
 	d, _ := startTestDaemon(t)
 	info, err := os.Stat(SocketPath(d.Dir))
 	if err != nil {
@@ -127,6 +131,19 @@ func TestSocketPermissions(t *testing.T) {
 	}
 	if perm := info.Mode().Perm(); perm != 0o600 {
 		t.Fatalf("socket perm = %o, want 0600", perm)
+	}
+}
+
+func TestAcquireLockExclusive(t *testing.T) {
+	dir := shortTempDir(t)
+	f, err := acquireLock(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	if second, err := acquireLock(dir); err == nil {
+		second.Close()
+		t.Fatal("second acquireLock on the same dir must fail while the first is held")
 	}
 }
 
