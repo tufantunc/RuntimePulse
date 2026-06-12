@@ -21,4 +21,14 @@ func New(c *client.Client) *mcp.Server {
 }
 
 // registerTools wires the five tools; filled in over Tasks 2–4.
-func registerTools(srv *mcp.Server, c *client.Client) {}
+func registerTools(srv *mcp.Server, c *client.Client) {
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "create_watch", Description: "Watch a runtime condition; emits events on state transitions.",
+	}, createWatchHandler(c))
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "get_events", Description: "Query recent events, newest first, optionally filtered by type.",
+	}, getEventsHandler(c))
+	mcp.AddTool(srv, &mcp.Tool{
+		Name: "cancel_rule", Description: "Cancel a pending rule by id.",
+	}, cancelRuleHandler(c))
+}
