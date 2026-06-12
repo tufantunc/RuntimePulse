@@ -226,6 +226,8 @@ type Adapter interface {
 
 v1 passes no permission flags on resume; the agent runs with its project-configured permissions (owner decision, 2026-06-11).
 
+Adapter binaries are overridable via `RUNTIMEPULSE_CLAUDE_BIN` / `RUNTIMEPULSE_CURSOR_BIN` / `RUNTIMEPULSE_CODEX_BIN` / `RUNTIMEPULSE_OPENCODE_BIN` (hermetic tests). All prompts pass positionally after a `--` terminator. v1 passes no permission/sandbox flags for any agent.
+
 Per-CLI details (session id locations, output schemas, auth, MCP registration) are distilled in [`docs/reference/`](reference/README.md), verified 2026-06-11. These surfaces drift; `Validate()` exists precisely because of that.
 
 Future targets: LangGraph agents, AutoGen, custom orchestrators.
@@ -363,7 +365,7 @@ Build order toward the final architecture (each stage lands fully designed, not 
 
 1. ✅ **Core:** SQLite store, event bus, rule engine, daemon skeleton + unix socket RPC.
 2. ✅ **Watchers:** http, docker, file, process, build, git — with initial-check + edge semantics.
-3. ✅ **Continuation:** dispatcher, per-session queues, supervision, Claude Code adapter first, then Cursor/Codex/OpenCode.
+3. ✅ **Continuation:** dispatcher, per-session queues, supervision, Claude Code adapter first, ✅ Cursor/Codex/OpenCode adapters (all four share one supervised CLI runner; registry wired in daemon).
 4. **Interfaces:** ✅ full CLI surface (stages 1–3), ✅ MCP server and tools (`create_watch`, `create_rule`, `wait_for_event`, `get_events`, `cancel_rule`) over stdio.
 5. **Layers:** workflow YAML compiler, WebSocket streaming (localhost + token), Claude Channels optimization.
 

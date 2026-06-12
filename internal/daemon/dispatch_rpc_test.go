@@ -61,3 +61,40 @@ func TestContinuationRunUnknownSession(t *testing.T) {
 		t.Fatal("continuation.run for unregistered session must error")
 	}
 }
+
+func TestCursorSessionDispatchesViaMock(t *testing.T) {
+	dir := shortTempDir(t)
+	mock := filepath.Join(dir, "mock-agent")
+	if err := os.WriteFile(mock,
+		[]byte("#!/bin/sh\nprintf '{\"type\":\"result\",\"result\":\"cursor turn done\"}'\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("RUNTIMEPULSE_CURSOR_BIN", mock)
+	_, c := startTestDaemon(t)
+
+	if err := c.Call("session.register",
+		map[string]any{"sessionId": "cur-1", "agent": "cursor", "repoPath": "/tmp"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Call("continuation.run",
+		map[string]any{"sessionId": "cur-1", "prompt": "go"}, nil); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		var done []map[string]any
+		if err := c.Call("continuation.list", map[string]any{"state": "completed"}, &done); err != nil {
+			t.Fatal(err)
+		}
+		if len(done) == 1 {
+			if s, _ := done[0]["outputSummary"].(string); s != "cursor turn done" {
+				t.Fatalf("summary = %v", done[0])
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("cursor continuation never completed")
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+}

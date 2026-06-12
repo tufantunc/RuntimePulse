@@ -18,6 +18,13 @@ MOCK
 chmod +x "$dir/mock-claude"
 export RUNTIMEPULSE_CLAUDE_BIN="$dir/mock-claude"
 
+cat > "$dir/mock-cursor" << 'MOCK'
+#!/bin/sh
+printf '{"type":"result","result":"cursor mock done"}'
+MOCK
+chmod +x "$dir/mock-cursor"
+export RUNTIMEPULSE_CURSOR_BIN="$dir/mock-cursor"
+
 go build -o "$dir/runtimepulse" ./cmd/runtimepulse
 rp="$dir/runtimepulse"
 
@@ -117,6 +124,16 @@ for _ in $(seq 1 25); do
   sleep 0.2
 done
 [ -n "$manual" ] || { echo "FAIL: manual continuation missing"; exit 1; }
+
+# --- multi-agent: a cursor session dispatches via its own adapter ---
+"$rp" session register --agent cursor --session smoke-cur --repo "$dir"
+"$rp" continue --session smoke-cur --prompt "cursor poke"
+curdone=""
+for _ in $(seq 1 25); do
+  if has 'cursor mock done' "$rp" continuations --state completed; then curdone=1; break; fi
+  sleep 0.2
+done
+[ -n "$curdone" ] || { echo "FAIL: cursor continuation missing"; exit 1; }
 
 # --- MCP server: stdio handshake lists the five tools ---
 mcp_in="$dir/mcp_in.jsonl"

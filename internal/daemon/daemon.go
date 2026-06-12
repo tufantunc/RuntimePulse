@@ -91,7 +91,12 @@ func New(dir string) (*Daemon, error) {
 			log.Printf("watch emit: ingest %s from %s failed: %v", evType, source, err)
 		}
 	})
-	disp := dispatch.New(st, adapter.Registry{"claude": adapter.Claude{}}, eng.Ingest)
+	disp := dispatch.New(st, adapter.Registry{
+		"claude":   adapter.Claude{},
+		"cursor":   adapter.Cursor{},
+		"codex":    adapter.Codex{},
+		"opencode": adapter.OpenCode{},
+	}, eng.Ingest)
 	eng.Notify = disp.Wake
 	return &Daemon{Dir: dir, Engine: eng, Watches: mgr, Dispatch: disp, store: st, bus: b, ln: ln, lock: lock}, nil
 }
