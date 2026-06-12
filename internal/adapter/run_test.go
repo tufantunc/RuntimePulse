@@ -58,6 +58,43 @@ func TestRunCLIStderrFallbackWhenStdoutEmpty(t *testing.T) {
 	}
 }
 
+func TestRunCLIFailureSurfacesStderrOverStdoutNoise(t *testing.T) {
+	// The opencode/LM-Studio case: a CLI prints unrelated chatter to
+	// stdout but the real error to stderr, then exits nonzero. The
+	// recorded summary must be the error, not the stdout noise.
+	bin := mockBin(t, mockexe.Spec{
+		Stdout: "plugin initialized\nplugin loaded\n",
+		Stderr: "Error: unexpected server error",
+		Exit:   1,
+	})
+	res, err := runCLI(context.Background(), bin, nil, t.TempDir(), rawSummary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ExitCode != 1 {
+		t.Fatalf("exit = %d, want 1", res.ExitCode)
+	}
+	if !strings.Contains(res.OutputSummary, "unexpected server error") {
+		t.Fatalf("failure summary must surface the stderr error, got: %q", res.OutputSummary)
+	}
+	if strings.Contains(res.OutputSummary, "plugin initialized") {
+		t.Fatalf("stdout noise must not mask the error: %q", res.OutputSummary)
+	}
+}
+
+func TestRunCLIFailureFallsBackToStdoutWhenStderrEmpty(t *testing.T) {
+	// Some CLIs print their error to stdout and exit nonzero; with no
+	// stderr, the summary must still carry that stdout error.
+	bin := mockBin(t, mockexe.Spec{Stdout: "fatal: bad revision", Exit: 2})
+	res, err := runCLI(context.Background(), bin, nil, t.TempDir(), rawSummary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.ExitCode != 2 || !strings.Contains(res.OutputSummary, "bad revision") {
+		t.Fatalf("stdout error must surface when stderr empty: %#v", res)
+	}
+}
+
 func TestRunCLITimeoutAnnotated(t *testing.T) {
 	bin := mockBin(t, mockexe.Spec{DelayMs: 5000})
 	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
