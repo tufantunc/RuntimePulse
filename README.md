@@ -1,5 +1,11 @@
 # RuntimePulse
 
+[![Release](https://img.shields.io/github/v/release/tufantunc/RuntimePulse?sort=semver)](https://github.com/tufantunc/RuntimePulse/releases)
+[![CI](https://github.com/tufantunc/RuntimePulse/actions/workflows/ci.yml/badge.svg)](https://github.com/tufantunc/RuntimePulse/actions/workflows/ci.yml)
+[![Go Reference](https://pkg.go.dev/badge/github.com/tufantunc/RuntimePulse.svg)](https://pkg.go.dev/github.com/tufantunc/RuntimePulse)
+[![Go Report Card](https://goreportcard.com/badge/github.com/tufantunc/RuntimePulse)](https://goreportcard.com/report/github.com/tufantunc/RuntimePulse)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
+
 **Event-driven session continuation engine for AI coding agents.**
 
 RuntimePulse watches runtime conditions — a port opening, a container turning healthy, a file appearing, a build finishing — and, when a condition is met, **resumes the relevant AI agent session** (Claude Code, Cursor CLI, Codex CLI, OpenCode) with the event injected as a new prompt turn:

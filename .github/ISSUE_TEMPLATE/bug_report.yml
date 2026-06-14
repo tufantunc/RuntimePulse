@@ -1,0 +1,48 @@
+name: Bug report
+description: Report a confirmed bug in RuntimePulse
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. For questions or ideas, please use
+        [Discussions](https://github.com/tufantunc/RuntimePulse/discussions) instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      description: Exact commands. Minimal repro preferred.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: RuntimePulse version
+      description: Output of `runtimepulse --version`
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: OS
+      options: [macOS, Linux, Windows]
+    validations:
+      required: true
+  - type: input
+    id: agent
+    attributes:
+      label: Agent(s) involved
+      description: e.g. claude / cursor / codex / opencode, and their version if relevant
+  - type: textarea
+    id: logs
+    attributes:
+      label: Daemon logs / output
+      description: Relevant output. Redact any secrets (never paste your ws-token).
+      render: shell
